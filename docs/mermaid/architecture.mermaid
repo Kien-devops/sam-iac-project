@@ -1,0 +1,50 @@
+graph TD
+    %% Define styles and classes
+    classDef client fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef infra fill:#bbf,stroke:#333,stroke-width:2px;
+    classDef app fill:#bfb,stroke:#333,stroke-width:2px;
+    classDef serverless fill:#ffb,stroke:#333,stroke-width:2px;
+
+    User([Web Browser Clients]):::client
+    
+    subgraph AWS VPC
+        ALB[Application Load Balancer]:::infra
+        
+        subgraph Public Subnets
+            %% ALB stands here
+        end
+        
+        subgraph Private Subnets
+            subgraph ECS Fargate Cluster
+                FrontendService[ECS Service: Frontend Nginx]:::app
+                BackendService[ECS Service: Backend Express API]:::app
+            end
+        end
+    end
+
+    %% Routing
+    User -->|HTTP port 80| ALB
+    ALB -->|Path: / or /*| FrontendService
+    ALB -->|Path: /api/*| BackendService
+
+    %% Backend integrations
+    BackendService -->|Read/Write Catalog & Orders| DynamoDB_Products[(DynamoDB: ProductsTable)]:::serverless
+    BackendService -->|Read/Write Catalog & Orders| DynamoDB_Orders[(DynamoDB: OrdersTable)]:::serverless
+    BackendService -->|Publish event: OrderCreated| SNS_Topic((SNS: OrderCreatedTopic)):::serverless
+
+    %% Serverless event routing
+    SNS_Topic -->|Subscribe & Forward| SQS_Queue[(SQS: OrderCreatedQueue)]:::serverless
+    
+    subgraph AWS SAM Serverless Stack
+        SQS_Queue -->|Trigger message batch| Lambda_Email[Lambda: send-email]:::serverless
+        SQS_Queue -->|Trigger message batch| Lambda_Invoice[Lambda: generate-invoice]:::serverless
+        
+        Scheduler[EventBridge Rule: Daily Cron]:::infra
+        Scheduler -->|Daily execution trigger| Lambda_Report[Lambda: daily-report]:::serverless
+    end
+
+    %% Lambda actions
+    Lambda_Email -->|SMTP simulation| Logs_Email[CloudWatch Log stream]:::infra
+    Lambda_Invoice -->|Write mock plain invoice| S3_Bucket[(S3: InvoicePDFBucket)]:::serverless
+    Lambda_Report -->|Scan OrdersTable & write report| DynamoDB_Reports[(DynamoDB: DailyReportsTable)]:::serverless
+    Lambda_Report -->|Scan Orders| DynamoDB_Orders

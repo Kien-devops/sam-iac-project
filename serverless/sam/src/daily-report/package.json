@@ -1,0 +1,10 @@
+{
+  "name": "daily-report",
+  "version": "1.0.0",
+  "description": "Daily scheduled job to calculate revenue metrics",
+  "main": "app.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.587.0",
+    "@aws-sdk/lib-dynamodb": "^3.587.0"
+  }
+}

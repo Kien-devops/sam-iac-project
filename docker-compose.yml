@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    container_name: hybrid-ecommerce-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=development
+      - JWT_SECRET=supersecretjwtkeyforlocaldev123!
+      - AWS_REGION=us-east-1
+      - USE_LOCAL_MOCK=true
+      - SNS_TOPIC_ARN=arn:aws:sns:us-east-1:123456789012:OrderCreatedTopic
+    volumes:
+      - ./apps/backend:/usr/src/app
+      - /usr/src/app/node_modules
+
+  frontend:
+    build:
+      context: ./apps/frontend
+      dockerfile: Dockerfile
+    container_name: hybrid-ecommerce-frontend
+    ports:
+      - "8080:80"
+    environment:
+      - VITE_API_URL=http://localhost:3000
+    depends_on:
+      - backend
+    volumes:
+      - ./apps/frontend:/usr/src/app
+      - /usr/src/app/node_modules

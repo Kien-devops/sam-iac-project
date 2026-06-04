@@ -1,0 +1,65 @@
+name: SAM Serverless CI/CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'serverless/sam/**'
+      - '.github/workflows/sam-ci-cd.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'serverless/sam/**'
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Configure AWS Credentials
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Prepare lambda code dependencies before SAM builds them
+      - name: Install Lambda Dependencies
+        run: |
+          echo "Installing dependencies for send-email..."
+          cd serverless/sam/src/send-email && npm ci || npm install
+          
+          echo "Installing dependencies for generate-invoice..."
+          cd ../generate-invoice && npm ci || npm install
+          
+          echo "Installing dependencies for daily-report..."
+          cd ../daily-report && npm ci || npm install
+          
+          cd ../../..
+
+      - name: SAM Build
+        run: |
+          cd serverless/sam
+          sam build
+
+      - name: SAM Deploy
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          cd serverless/sam
+          sam deploy --config-env prod --no-confirm-changeset --no-fail-on-empty-changeset

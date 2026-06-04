@@ -1,0 +1,190 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  hybrid-devops-ecommerce-aws serverless stack
+  Deploys SNS, SQS, DynamoDB, S3, and Lambda handlers for invoicing, emails, and reporting.
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, staging, prod]
+    Description: Environment stage (dev, staging, prod)
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 128
+    Runtime: nodejs20.x
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        ENV: !Ref Environment
+        LOG_LEVEL: INFO
+
+Resources:
+  # =========================================================================
+  # Databases & Storage
+  # =========================================================================
+  ProductsTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName: !Sub ProductsTable-${Environment}
+      PrimaryKey:
+        Name: id
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  OrdersTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName: !Sub OrdersTable-${Environment}
+      PrimaryKey:
+        Name: id
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  DailyReportsTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName: !Sub DailyReportsTable-${Environment}
+      PrimaryKey:
+        Name: date
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  InvoicePDFBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub invoice-pdf-bucket-${Environment}-${AWS::AccountId}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # =========================================================================
+  # Messaging Layer (SNS & SQS)
+  # =========================================================================
+  OrderCreatedTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub OrderCreatedTopic-${Environment}
+
+  OrderCreatedQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub OrderCreatedQueue-${Environment}
+      VisibilityTimeout: 90 # VisTimeout should be at least 3x function timeout
+
+  SNSToSQSSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref OrderCreatedTopic
+      Endpoint: !GetAtt OrderCreatedQueue.Arn
+      Protocol: sqs
+
+  # Policy to allow SNS to write to SQS Queue
+  SQSQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref OrderCreatedQueue
+      PolicyDocument:
+        Version: '2012-10-01'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt OrderCreatedQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref OrderCreatedTopic
+
+  # =========================================================================
+  # Lambda Compute Handlers
+  # =========================================================================
+
+  SendEmailConfirmationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambdaHandler
+      CodeUri: src/send-email/
+      Description: Send confirmation email upon receiving OrderCreated event.
+      Events:
+        SQSQueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt OrderCreatedQueue.Arn
+            BatchSize: 10
+
+  GenerateInvoiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambdaHandler
+      CodeUri: src/generate-invoice/
+      Description: Generate invoice PDF text and upload to S3 Bucket.
+      Environment:
+        Variables:
+          INVOICE_BUCKET: !Ref InvoicePDFBucket
+      Policies:
+        - S3WritePolicy:
+            BucketName: !Sub invoice-pdf-bucket-${Environment}-${AWS::AccountId}
+      Events:
+        SQSQueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt OrderCreatedQueue.Arn
+            BatchSize: 10
+
+  DailyRevenueReportFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambdaHandler
+      CodeUri: src/daily-report/
+      Description: Daily scheduler to aggregate orders revenue.
+      Environment:
+        Variables:
+          ORDERS_TABLE: !Ref OrdersTable
+          REPORTS_TABLE: !Ref DailyReportsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Sub OrdersTable-${Environment}
+        - DynamoDBCrudPolicy:
+            TableName: !Sub DailyReportsTable-${Environment}
+      Events:
+        DailyCronTrigger:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 23 * * ? *) # Runs at 23:00 UTC daily
+            Name: DailyReportCron
+            Description: Trigger daily revenue aggregation
+            Enabled: True
+
+Outputs:
+  ProductsTableName:
+    Value: !Ref ProductsTable
+    Export:
+      Name: !Sub ${AWS::StackName}-ProductsTable
+  OrdersTableName:
+    Value: !Ref OrdersTable
+    Export:
+      Name: !Sub ${AWS::StackName}-OrdersTable
+  DailyReportsTableName:
+    Value: !Ref DailyReportsTable
+    Export:
+      Name: !Sub ${AWS::StackName}-DailyReportsTable
+  InvoiceBucketName:
+    Value: !Ref InvoicePDFBucket
+  OrderCreatedTopicArn:
+    Value: !Ref OrderCreatedTopic
+    Export:
+      Name: !Sub ${AWS::StackName}-OrderCreatedTopicArn

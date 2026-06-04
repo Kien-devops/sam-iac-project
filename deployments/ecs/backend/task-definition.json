@@ -1,0 +1,63 @@
+{
+  "family": "prod-backend",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::<AWS_ACCOUNT_ID>:role/prod-ecs-execution-role",
+  "taskRoleArn": "arn:aws:iam::<AWS_ACCOUNT_ID>:role/prod-ecs-task-role",
+  "containerDefinitions": [
+    {
+      "name": "backend",
+      "image": "<IMAGE_URL>",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "hostPort": 3000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "PORT",
+          "value": "3000"
+        },
+        {
+          "name": "NODE_ENV",
+          "value": "production"
+        },
+        {
+          "name": "USE_LOCAL_MOCK",
+          "value": "false"
+        },
+        {
+          "name": "SNS_TOPIC_ARN",
+          "value": "<SNS_TOPIC_ARN>"
+        },
+        {
+          "name": "PRODUCTS_TABLE",
+          "value": "ProductsTable-prod"
+        },
+        {
+          "name": "ORDERS_TABLE",
+          "value": "OrdersTable-prod"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "us-east-1"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/hybrid-devops-backend-prod",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "backend"
+        }
+      }
+    }
+  ]
+}
