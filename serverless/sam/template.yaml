@@ -65,7 +65,8 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub invoice-pdf-bucket-${Environment}-${AWS::AccountId}
+      # BucketName intentionally omitted - CloudFormation auto-generates a unique name
+      # to prevent 409 conflicts when re-deploying after rollback
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -139,7 +140,7 @@ Resources:
           INVOICE_BUCKET: !Ref InvoicePDFBucket
       Policies:
         - S3WritePolicy:
-            BucketName: !Sub invoice-pdf-bucket-${Environment}-${AWS::AccountId}
+            BucketName: !Ref InvoicePDFBucket
       Events:
         SQSQueueEvent:
           Type: SQS
