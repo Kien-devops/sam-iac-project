@@ -25,7 +25,7 @@ on:
       - '.github/workflows/main-ci-cd.yml'
 
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: ap-southeast-1
 
 jobs:
   # =========================================================================

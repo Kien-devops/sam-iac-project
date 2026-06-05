@@ -70,5 +70,5 @@ variable "log_group_name" {
 variable "aws_region" {
   type        = string
   description = "AWS region for logs"
-  default     = "us-east-1"
+  default     = "ap-southeast-1"
 }
