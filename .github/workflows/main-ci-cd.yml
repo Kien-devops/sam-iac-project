@@ -72,6 +72,22 @@ jobs:
           cd serverless/sam
           sam build
 
+      - name: Cleanup ROLLBACK_COMPLETE stack (if any)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          STACK_NAME="hybrid-devops-serverless-prod"
+          REGION="${{ env.AWS_REGION }}"
+          STATUS=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --region $REGION --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+          echo "Current stack status: $STATUS"
+          if [ "$STATUS" = "ROLLBACK_COMPLETE" ]; then
+            echo "Stack is in ROLLBACK_COMPLETE. Deleting before redeployment..."
+            aws cloudformation delete-stack --stack-name $STACK_NAME --region $REGION
+            aws cloudformation wait stack-delete-complete --stack-name $STACK_NAME --region $REGION
+            echo "Stack deleted successfully."
+          else
+            echo "Stack is in state '$STATUS', no cleanup needed."
+          fi
+
       - name: SAM Deploy
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
