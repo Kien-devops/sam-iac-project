@@ -29,6 +29,7 @@ class OrderService {
 
     const orderPayload = {
       items: orderData.items,
+      email: orderData.email || '',
       total
     };
 

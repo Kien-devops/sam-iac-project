@@ -112,6 +112,36 @@ Resources:
               ArnEquals:
                 aws:SourceArn: !Ref OrderCreatedTopic
 
+  SendEmailQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub SendEmailQueue-${Environment}
+      VisibilityTimeout: 90
+
+  SNSToSendEmailQueueSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref OrderCreatedTopic
+      Endpoint: !GetAtt SendEmailQueue.Arn
+      Protocol: sqs
+
+  SendEmailQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref SendEmailQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt SendEmailQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref OrderCreatedTopic
+
   # =========================================================================
   # Lambda Compute Handlers
   # =========================================================================
@@ -126,7 +156,7 @@ Resources:
         SQSQueueEvent:
           Type: SQS
           Properties:
-            Queue: !GetAtt OrderCreatedQueue.Arn
+            Queue: !GetAtt SendEmailQueue.Arn
             BatchSize: 10
 
   GenerateInvoiceFunction:

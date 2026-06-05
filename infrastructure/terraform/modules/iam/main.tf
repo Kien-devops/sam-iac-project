@@ -85,7 +85,8 @@ resource "aws_iam_policy" "ecs_task_permissions" {
       {
         Effect = "Allow"
         Action = [
-          "sns:Publish"
+          "sns:Publish",
+          "sns:Subscribe"
         ]
         Resource = "arn:aws:sns:*:*:OrderCreatedTopic-*"
       },

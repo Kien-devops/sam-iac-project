@@ -106,9 +106,23 @@ function App() {
   };
 
   const handleBuyProduct = async (product) => {
+    let email = '';
+    if (backendStatus === 'online') {
+      const inputEmail = window.prompt("Enter your email address to receive order updates via AWS SNS:");
+      if (inputEmail === null) {
+        return;
+      }
+      if (!inputEmail.trim() || !inputEmail.includes('@')) {
+        showNotification('error', 'Please enter a valid email address.');
+        return;
+      }
+      email = inputEmail.trim();
+    }
+
     setLoadingOrder(true);
     try {
       const payload = {
+        email,
         items: [
           {
             productId: product.id,
@@ -123,7 +137,7 @@ function App() {
       if (backendStatus === 'online') {
         response = await axios.post(`${API_BASE_URL}/api/orders`, payload);
         setOrders(prev => [response.data, ...prev]);
-        showNotification('success', `Order placed successfully! SNS event published.`);
+        showNotification('success', `Order placed successfully! SNS subscription requested.`);
       } else {
         // Mock order placement
         const mockOrder = {

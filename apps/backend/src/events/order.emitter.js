@@ -1,5 +1,5 @@
 const { snsClient, useLocalMock } = require('../config/aws');
-const { PublishCommand } = require('@aws-sdk/client-sns');
+const { PublishCommand, SubscribeCommand } = require('@aws-sdk/client-sns');
 
 const snsTopicArn = process.env.AWS_SNS_ORDER_CREATED_ARN || process.env.SNS_TOPIC_ARN;
 
@@ -13,6 +13,22 @@ class OrderEmitter {
     if (!snsTopicArn) {
       console.warn('[Event Warning] ⚠️ AWS_SNS_ORDER_CREATED_ARN is not configured. SNS publish skipped.');
       return null;
+    }
+
+    // Subscribe customer email dynamically if provided
+    if (order.email) {
+      try {
+        console.log(`[Event Emitter] 📧 Subscribing customer email ${order.email} to SNS Topic...`);
+        const subscribeCommand = new SubscribeCommand({
+          TopicArn: snsTopicArn,
+          Protocol: 'email',
+          Endpoint: order.email
+        });
+        await snsClient.send(subscribeCommand);
+        console.log(`[Event Emitter] ✅ Subscription request sent successfully to ${order.email}`);
+      } catch (subError) {
+        console.error(`[Event Emitter] ❌ Warning: Failed to subscribe email ${order.email} to SNS:`, subError);
+      }
     }
 
     try {
