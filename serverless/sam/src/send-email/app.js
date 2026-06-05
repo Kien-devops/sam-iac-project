@@ -5,7 +5,7 @@ const s3Client = new S3Client({});
 const sesClient = new SESClient({});
 
 const invoiceBucketName = process.env.INVOICE_BUCKET;
-const senderEmail = process.env.SENDER_EMAIL || 'kien_test_sns@mailinator.com';
+const senderEmail = process.env.SENDER_EMAIL || 'kien07493@gmail.com';
 
 exports.lambdaHandler = async (event, context) => {
   console.log('[Lambda send-email] Received event:', JSON.stringify(event, null, 2));
@@ -14,7 +14,7 @@ exports.lambdaHandler = async (event, context) => {
     for (const record of event.Records) {
       const snsMessage = JSON.parse(record.body);
       const order = JSON.parse(snsMessage.Message);
-      
+
       const recipientEmail = order.email;
       if (!recipientEmail) {
         console.warn(`[Lambda send-email] Order ${order.id} has no email address. Skipping email sending.`);
@@ -24,7 +24,7 @@ exports.lambdaHandler = async (event, context) => {
       console.log(`[Lambda send-email] Processing email for order ${order.id} to ${recipientEmail}`);
 
       let invoiceContent = '';
-      
+
       // Attempt 1: Fetch invoice from S3
       if (invoiceBucketName) {
         const key = `invoices/${order.id}.txt`;

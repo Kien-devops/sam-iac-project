@@ -155,7 +155,7 @@ Resources:
       Environment:
         Variables:
           INVOICE_BUCKET: !Ref InvoicePDFBucket
-          SENDER_EMAIL: kien_test_sns@mailinator.com
+          SENDER_EMAIL: kien07493@gmail.com
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref InvoicePDFBucket
