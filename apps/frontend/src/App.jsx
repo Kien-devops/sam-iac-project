@@ -23,7 +23,7 @@ function App() {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [backendStatus, setBackendStatus] = useState('checking');
-  const [customerEmail, setCustomerEmail] = useState('kien07493@gmail.com');
+  const [customerEmail, setCustomerEmail] = useState('');
   const [loadingVerification, setLoadingVerification] = useState(false);
   
   // Form states
