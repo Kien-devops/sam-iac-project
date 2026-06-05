@@ -78,6 +78,10 @@ module "ecs_frontend" {
   desired_count         = var.frontend_desired_count
 }
 
+data "aws_cloudformation_stack" "sam" {
+  name = "hybrid-devops-serverless-${var.environment}"
+}
+
 module "ecs_backend" {
   source                = "../../modules/ecs/backend"
   environment           = var.environment
@@ -95,7 +99,8 @@ module "ecs_backend" {
   memory                = var.backend_memory
   desired_count         = var.backend_desired_count
 
-  sns_topic_arn  = var.sns_topic_arn
-  products_table = var.products_table
-  orders_table   = var.orders_table
+  sns_topic_arn  = data.aws_cloudformation_stack.sam.outputs["OrderCreatedTopicArn"]
+  products_table = data.aws_cloudformation_stack.sam.outputs["ProductsTableName"]
+  orders_table   = data.aws_cloudformation_stack.sam.outputs["OrdersTableName"]
+  jwt_secret     = var.jwt_secret
 }

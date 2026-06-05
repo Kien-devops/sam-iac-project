@@ -1,0 +1,296 @@
+name: Unified Serverless & Infrastructure CI/CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'serverless/sam/**'
+      - 'infrastructure/terraform/**'
+      - 'apps/backend/**'
+      - 'deployments/ecs/backend/**'
+      - 'apps/frontend/**'
+      - 'deployments/ecs/frontend/**'
+      - '.github/workflows/main-ci-cd.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'serverless/sam/**'
+      - 'infrastructure/terraform/**'
+      - 'apps/backend/**'
+      - 'deployments/ecs/backend/**'
+      - 'apps/frontend/**'
+      - 'deployments/ecs/frontend/**'
+      - '.github/workflows/main-ci-cd.yml'
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  # =========================================================================
+  # Stage 1: Serverless SAM Stack Deployment
+  # =========================================================================
+  sam-deploy:
+    name: SAM Build & Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Configure AWS Credentials
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install Lambda Dependencies
+        run: |
+          echo "Installing dependencies for send-email..."
+          cd serverless/sam/src/send-email && npm ci || npm install
+          
+          echo "Installing dependencies for generate-invoice..."
+          cd ../generate-invoice && npm ci || npm install
+          
+          echo "Installing dependencies for daily-report..."
+          cd ../daily-report && npm ci || npm install
+          
+          cd ../../..
+
+      - name: SAM Build
+        run: |
+          cd serverless/sam
+          sam build
+
+      - name: SAM Deploy
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          cd serverless/sam
+          sam deploy --config-env prod --s3-bucket ${{ secrets.AWS_S3_BUCKET }} --no-confirm-changeset --no-fail-on-empty-changeset
+
+  # =========================================================================
+  # Stage 1 (Parallel): Backend Unit Testing & Auditing
+  # =========================================================================
+  backend-test-and-scan:
+    name: Backend Test & Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+          cache-dependency-path: 'apps/backend/package-lock.json'
+
+      - name: Install Dependencies
+        run: |
+          cd apps/backend
+          npm ci
+
+      - name: Run Unit Tests
+        run: |
+          cd apps/backend
+          npm test
+
+      - name: Node Security Audit
+        run: |
+          cd apps/backend
+          npm audit --audit-level=high || true
+
+  # =========================================================================
+  # Stage 2: Terraform Infrastructure Deployment
+  # =========================================================================
+  terraform-deploy:
+    name: Terraform Plan & Apply
+    needs: sam-deploy
+    runs-on: ubuntu-latest
+    env:
+      TF_WORKING_DIR: infrastructure/terraform/environments/prod
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Format Check
+        run: |
+          cd ${{ env.TF_WORKING_DIR }}
+          terraform fmt -check -recursive ../../
+
+      - name: Terraform Init
+        run: |
+          cd ${{ env.TF_WORKING_DIR }}
+          terraform init
+
+      - name: Terraform Plan
+        id: plan
+        run: |
+          cd ${{ env.TF_WORKING_DIR }}
+          terraform plan -no-color
+
+      - name: Terraform Apply
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          cd ${{ env.TF_WORKING_DIR }}
+          terraform apply -auto-approve
+
+  # =========================================================================
+  # Stage 3: Backend ECR Build, Vulnerability Scan, & ECS Deployment
+  # =========================================================================
+  backend-deploy:
+    name: Backend Build & Deploy
+    needs: [terraform-deploy, backend-test-and-scan]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      ECR_REPOSITORY: prod-backend
+      ECS_CLUSTER: prod-cluster
+      ECS_SERVICE: prod-backend
+      CONTAINER_NAME: backend
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker Image
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          # Copy backend files into deployments context folder
+          rm -rf deployments/ecs/backend/src deployments/ecs/backend/package*.json
+          cp -r apps/backend/src deployments/ecs/backend/src
+          cp apps/backend/package*.json deployments/ecs/backend/
+          
+          # Build image
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest deployments/ecs/backend
+          
+          # Push image
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Scan Docker Image for Vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Deploy to ECS Fargate
+        run: |
+          echo "Updating ECS service to run new image version: ${{ steps.build-image.outputs.image }}"
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+
+  # =========================================================================
+  # Stage 3 (Parallel): Frontend Web Build, Docker Build, & ECS Deployment
+  # =========================================================================
+  frontend-deploy:
+    name: Frontend Build & Deploy
+    needs: terraform-deploy
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      ECR_REPOSITORY: prod-frontend
+      ECS_CLUSTER: prod-cluster
+      ECS_SERVICE: prod-frontend
+      CONTAINER_NAME: frontend
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+          cache-dependency-path: 'apps/frontend/package-lock.json'
+
+      - name: Install Dependencies
+        run: |
+          cd apps/frontend
+          npm ci
+
+      - name: Build Web Application
+        run: |
+          cd apps/frontend
+          npm run build
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and Push Docker Image
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          # Copy build output to ecs deployments folder context
+          rm -rf deployments/ecs/frontend/dist
+          cp -r apps/frontend/dist deployments/ecs/frontend/dist
+          
+          # Build & tag image
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest deployments/ecs/frontend
+          
+          # Push image
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Deploy to ECS Fargate
+        run: |
+          echo "Updating ECS service to run new image version: ${{ steps.build-image.outputs.image }}"
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}

@@ -71,6 +71,10 @@ resource "aws_ecs_task_definition" "backend" {
         {
           name  = "AWS_REGION"
           value = var.aws_region
+        },
+        {
+          name  = "JWT_SECRET"
+          value = var.jwt_secret
         }
       ]
       logConfiguration = {

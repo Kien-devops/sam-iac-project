@@ -91,3 +91,8 @@ variable "orders_table" {
   description = "DynamoDB Orders table name"
   default     = ""
 }
+
+variable "jwt_secret" {
+  type        = string
+  description = "JWT secret key for backend authentication"
+}

@@ -88,3 +88,9 @@ variable "orders_table" {
   description = "DynamoDB orders table name managed by AWS SAM"
   default     = ""
 }
+
+variable "jwt_secret" {
+  type        = string
+  description = "JWT secret key for backend authentication"
+  default     = "supersecretjwtkeyforlocaldev123!"
+}
