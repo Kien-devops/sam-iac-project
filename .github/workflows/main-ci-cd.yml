@@ -56,8 +56,11 @@ jobs:
 
       - name: Install Lambda Dependencies
         run: |
+          echo "Installing dependencies for send-email..."
+          cd serverless/sam/src/send-email && npm ci || npm install
+          
           echo "Installing dependencies for generate-invoice..."
-          cd serverless/sam/src/generate-invoice && npm ci || npm install
+          cd ../generate-invoice && npm ci || npm install
           
           echo "Installing dependencies for daily-report..."
           cd ../daily-report && npm ci || npm install

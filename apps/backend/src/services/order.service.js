@@ -56,28 +56,25 @@ class OrderService {
     }
 
     if (useLocalMock) {
-      console.log(`[Local Mock] Simulated sending SNS subscription invitation to: ${email}`);
-      return { success: true, message: `Mock: SNS subscription invitation sent to ${email}` };
+      console.log(`[Local Mock] Simulated SNS subscription for: ${email}`);
+      return { success: true, message: `Mock: SNS subscription sent to ${email}` };
     }
 
     try {
-      console.log(`[SNS Service] Subscribing email: ${email} to Topic: ${snsTopicArn}`);
       if (!snsTopicArn) {
         throw new Error('SNS Topic ARN is not configured');
       }
-
+      console.log(`[SNS Service] Subscribing email: ${email} to Topic: ${snsTopicArn}`);
       const command = new SubscribeCommand({
         TopicArn: snsTopicArn,
         Protocol: 'email',
         Endpoint: email,
         Attributes: {
-          FilterPolicy: JSON.stringify({
-            email: [email]
-          })
+          FilterPolicy: JSON.stringify({ email: [email] })
         }
       });
       await snsClient.send(command);
-      return { success: true, message: `Subscription request sent to ${email}. Please check your inbox and click 'Confirm subscription' in the email from AWS.` };
+      return { success: true, message: `Subscription request sent to ${email}. Please check your inbox and click Confirm subscription.` };
     } catch (error) {
       console.error('[SNS Service] Error subscribing email:', error);
       throw new Error(`AWS SNS Error: ${error.message}`);

@@ -17,12 +17,12 @@ class OrderEmitter {
 
     try {
       console.log(`[Event Emitter] 🔔 Publishing OrderCreated event for ${order.id} to ${snsTopicArn}...`);
-      
+
+      // Nội dung hóa đơn text gửi trực tiếp cho email subscriber
       const invoiceText = `
 =========================================
-          TAX INVOICE - ORDER CREATED
+          TAX INVOICE - ORDER NOTIFICATION
 =========================================
-Invoice Number: INV-${order.id.split('-')[1] || order.id}
 Order ID: ${order.id}
 Date: ${new Date(order.createdAt).toUTCString()}
 
@@ -32,7 +32,7 @@ ${order.items.map(item => `- ${item.name} | Qty: ${item.quantity} | Price: $${it
 -----------------------------------------
 TOTAL AMOUNT: $${order.total}
 =========================================
-Thank you for buying from our Cloud-Native platform!
+Thank you for your purchase!
 `;
 
       const messageObj = {
