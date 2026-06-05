@@ -70,7 +70,7 @@ variable "log_group_name" {
 variable "aws_region" {
   type        = string
   description = "AWS region for logs"
-  default     = "ap-southeast-1"
+  default     = "ap-southeast-2"
 }
 
 # Backend specific integrations

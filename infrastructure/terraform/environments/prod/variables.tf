@@ -1,7 +1,7 @@
 variable "aws_region" {
   type        = string
   description = "AWS deployment region"
-  default     = "ap-southeast-1"
+  default     = "ap-southeast-2"
 }
 
 variable "environment" {
@@ -31,7 +31,7 @@ variable "private_subnet_cidrs" {
 variable "availability_zones" {
   type        = list(string)
   description = "Availability zones list"
-  default     = ["ap-southeast-1a", "ap-southeast-1b"]
+  default     = ["ap-southeast-2a", "ap-southeast-2b"]
 }
 
 variable "frontend_cpu" {
