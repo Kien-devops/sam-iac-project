@@ -27,6 +27,16 @@ class OrderController {
       res.status(400).json({ error: error.message });
     }
   }
+
+  async verifyEmail(req, res, next) {
+    try {
+      const { email } = req.body;
+      const result = await orderService.verifyEmailIdentity(email);
+      res.status(200).json(result);
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  }
 }
 
 module.exports = new OrderController();

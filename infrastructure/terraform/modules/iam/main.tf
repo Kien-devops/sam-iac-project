@@ -93,6 +93,13 @@ resource "aws_iam_policy" "ecs_task_permissions" {
       {
         Effect = "Allow"
         Action = [
+          "ses:VerifyEmailIdentity"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "dynamodb:Scan",
           "dynamodb:Query",
           "dynamodb:GetItem",

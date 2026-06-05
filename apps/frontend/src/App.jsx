@@ -23,7 +23,8 @@ function App() {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [backendStatus, setBackendStatus] = useState('checking');
-  const [customerEmail, setCustomerEmail] = useState('kien_test_sns@mailinator.com');
+  const [customerEmail, setCustomerEmail] = useState('kien07493@gmail.com');
+  const [loadingVerification, setLoadingVerification] = useState(false);
   
   // Form states
   const [newProduct, setNewProduct] = useState({ name: '', price: '', category: 'Electronics', description: '' });
@@ -150,6 +151,30 @@ function App() {
       showNotification('error', 'Failed to process checkout.');
     } finally {
       setLoadingOrder(false);
+    }
+  };
+
+  const handleVerifyEmail = async () => {
+    if (!customerEmail || !customerEmail.trim() || !customerEmail.includes('@')) {
+      showNotification('error', 'Please enter a valid email address first.');
+      return;
+    }
+    setLoadingVerification(true);
+    try {
+      const payload = { email: customerEmail.trim() };
+      let response;
+      if (backendStatus === 'online') {
+        response = await axios.post(`${API_BASE_URL}/api/orders/verify-email`, payload);
+        showNotification('success', response.data.message || 'Verification email sent!');
+      } else {
+        // Mock verification
+        showNotification('warning', `Mock: Verification request sent for ${customerEmail.trim()}`);
+      }
+    } catch (error) {
+      const errMsg = error.response?.data?.error || 'Failed to request email verification.';
+      showNotification('error', errMsg);
+    } finally {
+      setLoadingVerification(false);
     }
   };
 
@@ -315,10 +340,10 @@ function App() {
                 {/* Customer Notification Email Card */}
                 <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <h4 style={{ fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                    <Mail size={16} className="gradient-text" /> Customer Notification Email
+                    <Mail size={16} className="gradient-text" /> Customer Notification Email (SES Sandbox)
                   </h4>
                   <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                    Enter your email to receive order updates and PDF invoices automatically via AWS SNS and SES.
+                    Enter your email. Since the AWS account is in SES Sandbox mode, you must click <strong>"Verify Email"</strong> below to register this address with AWS SES first.
                   </p>
                   <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                     <input 
@@ -329,7 +354,18 @@ function App() {
                       onChange={e => setCustomerEmail(e.target.value)}
                       style={{ flex: 1, padding: '12px', fontSize: '0.9rem' }}
                     />
+                    <button 
+                      onClick={handleVerifyEmail} 
+                      className="btn btn-secondary" 
+                      style={{ padding: '12px 20px', fontSize: '0.85rem', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                      disabled={loadingVerification}
+                    >
+                      {loadingVerification ? 'Requesting...' : 'Verify Email'}
+                    </button>
                   </div>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--accent-amber)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <AlertCircle size={14} /> Sau khi click, kiểm tra hộp thư (inbox/spam) để click vào link xác minh của AWS SES trước khi mua hàng.
+                  </p>
                 </div>
                 
                 {products.length === 0 ? (

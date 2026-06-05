@@ -1,5 +1,7 @@
 const orderRepository = require('../repositories/order.repository');
 const orderEmitter = require('../events/order.emitter');
+const { VerifyEmailIdentityCommand } = require('@aws-sdk/client-ses');
+const { sesClient, useLocalMock } = require('../config/aws');
 
 class OrderService {
   async listOrders() {
@@ -44,6 +46,27 @@ class OrderService {
     }
 
     return createdOrder;
+  }
+
+  async verifyEmailIdentity(email) {
+    if (!email || !email.includes('@')) {
+      throw new Error('Invalid email address');
+    }
+
+    if (useLocalMock) {
+      console.log(`[Local Mock] Simulated sending SES verification email to: ${email}`);
+      return { success: true, message: `Mock: Verification email sent to ${email}` };
+    }
+
+    try {
+      console.log(`[SES Service] Sending verification request for email: ${email}`);
+      const command = new VerifyEmailIdentityCommand({ EmailAddress: email });
+      await sesClient.send(command);
+      return { success: true, message: `Verification email sent to ${email}. Please check your inbox/spam folder.` };
+    } catch (error) {
+      console.error('[SES Service] Error requesting verification:', error);
+      throw new Error(`AWS SES Error: ${error.message}`);
+    }
   }
 }
 
