@@ -2,7 +2,7 @@ resource "aws_iam_role" "ecs_execution_role" {
   name = "${var.environment}-ecs-execution-role"
 
   assume_role_policy = JSONencode({
-    Version = "2012-10-01"
+    Version = "2012-10-17"
     Statement = [
       {
         Action = "sts:AssumeRole"
@@ -30,7 +30,7 @@ resource "aws_iam_policy" "ecs_execution_secrets" {
   description = "Allows ECS tasks to pull from ECR and log"
 
   policy = JSONencode({
-    Version = "2012-10-01"
+    Version = "2012-10-17"
     Statement = [
       {
         Effect = "Allow"
@@ -57,7 +57,7 @@ resource "aws_iam_role" "ecs_task_role" {
   name = "${var.environment}-ecs-task-role"
 
   assume_role_policy = JSONencode({
-    Version = "2012-10-01"
+    Version = "2012-10-17"
     Statement = [
       {
         Action = "sts:AssumeRole"
@@ -80,7 +80,7 @@ resource "aws_iam_policy" "ecs_task_permissions" {
   description = "Allows ECS Tasks to publish to SNS and read/write from DynamoDB"
 
   policy = JSONencode({
-    Version = "2012-10-01"
+    Version = "2012-10-17"
     Statement = [
       {
         Effect = "Allow"
