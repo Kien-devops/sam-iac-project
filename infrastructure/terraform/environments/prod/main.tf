@@ -6,9 +6,12 @@ terraform {
       version = "~> 5.0"
     }
   }
-  # S3 backend is typically configured in production, we allow local state for dev bootstrap
-  backend "local" {
-    path = "terraform.tfstate"
+  backend "s3" {
+    bucket         = "terraform-state-kien-prod"
+    key            = "prod/terraform.tfstate"
+    region         = "ap-southeast-1"
+    dynamodb_table = "terraform-state-lock-prod"
+    encrypt        = true
   }
 }
 

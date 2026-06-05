@@ -161,6 +161,27 @@ jobs:
           cd ${{ env.TF_WORKING_DIR }}
           terraform init
 
+      - name: Import Existing Resources (if orphaned)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          cd ${{ env.TF_WORKING_DIR }}
+          # Import existing resources that may have been created in a previous failed run.
+          # Each import is wrapped in || true so it is skipped if already in state or not found.
+          REGION="${{ env.AWS_REGION }}"
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+          # ECS Cluster
+          aws ecs describe-clusters --clusters prod-cluster --region $REGION --query "clusters[0].status" --output text 2>/dev/null | grep -q ACTIVE \
+            && terraform import aws_ecs_cluster.main arn:aws:ecs:$REGION:$ACCOUNT_ID:cluster/prod-cluster || true
+
+          # ECR Repositories
+          aws ecr describe-repositories --repository-names prod-backend --region $REGION &>/dev/null \
+            && terraform import module.ecr.aws_ecr_repository.backend prod-backend || true
+          aws ecr describe-repositories --repository-names prod-frontend --region $REGION &>/dev/null \
+            && terraform import module.ecr.aws_ecr_repository.frontend prod-frontend || true
+
+          echo "Import step complete."
+
       - name: Terraform Plan
         id: plan
         run: |
