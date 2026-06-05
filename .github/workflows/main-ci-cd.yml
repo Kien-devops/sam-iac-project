@@ -88,11 +88,32 @@ jobs:
             echo "Stack is in state '$STATUS', no cleanup needed."
           fi
 
+      - name: Bootstrap SAM Deploy S3 Bucket
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: bootstrap-sam
+        run: |
+          REGION="${{ env.AWS_REGION }}"
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET="sam-deploy-bucket-${ACCOUNT_ID}-${REGION}"
+          
+          # Create S3 bucket if it doesn't exist
+          if ! aws s3api head-bucket --bucket "$BUCKET" --region $REGION 2>/dev/null; then
+            echo "Creating SAM deployment bucket: $BUCKET"
+            aws s3 mb s3://$BUCKET --region $REGION
+            aws s3api put-bucket-versioning \
+              --bucket $BUCKET \
+              --versioning-configuration Status=Enabled \
+              --region $REGION
+          else
+            echo "SAM deployment bucket already exists: $BUCKET"
+          fi
+          echo "sam_bucket=$BUCKET" >> $GITHUB_OUTPUT
+
       - name: SAM Deploy
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           cd serverless/sam
-          sam deploy --config-env prod --s3-bucket ${{ secrets.AWS_S3_BUCKET }} --no-confirm-changeset --no-fail-on-empty-changeset
+          sam deploy --config-env prod --s3-bucket ${{ steps.bootstrap-sam.outputs.sam_bucket }} --no-confirm-changeset --no-fail-on-empty-changeset
 
   # =========================================================================
   # Stage 1 (Parallel): Backend Unit Testing & Auditing
@@ -157,10 +178,12 @@ jobs:
           terraform fmt -check -recursive ../../
 
       - name: Bootstrap Terraform Backend (auto-create if not exists)
+        id: bootstrap-tf
         run: |
-          BUCKET="${{ secrets.TF_BACKEND_BUCKET }}"
-          TABLE="${{ secrets.TF_BACKEND_DYNAMODB_TABLE }}"
           REGION="${{ env.AWS_REGION }}"
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET="terraform-state-${ACCOUNT_ID}-${REGION}"
+          TABLE="terraform-state-lock-${ACCOUNT_ID}"
 
           # Create S3 bucket if it doesn't exist
           if ! aws s3api head-bucket --bucket "$BUCKET" --region $REGION 2>/dev/null; then
@@ -192,15 +215,18 @@ jobs:
           else
             echo "Terraform lock table already exists: $TABLE"
           fi
+          
+          echo "tf_bucket=$BUCKET" >> $GITHUB_OUTPUT
+          echo "tf_table=$TABLE" >> $GITHUB_OUTPUT
 
       - name: Terraform Init
         run: |
           cd ${{ env.TF_WORKING_DIR }}
           terraform init \
-            -backend-config="bucket=${{ secrets.TF_BACKEND_BUCKET }}" \
+            -backend-config="bucket=${{ steps.bootstrap-tf.outputs.tf_bucket }}" \
             -backend-config="key=prod/terraform.tfstate" \
             -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="dynamodb_table=${{ secrets.TF_BACKEND_DYNAMODB_TABLE }}" \
+            -backend-config="dynamodb_table=${{ steps.bootstrap-tf.outputs.tf_table }}" \
             -backend-config="encrypt=true"
 
       - name: Import Existing Resources (if orphaned)
