@@ -14,7 +14,7 @@ resource "aws_ecr_repository" "frontend" {
 resource "aws_ecr_lifecycle_policy" "frontend" {
   repository = aws_ecr_repository.frontend.name
 
-  policy = JSONencode({
+  policy = jsonencode({
     rules = [
       {
         rulePriority = 1
