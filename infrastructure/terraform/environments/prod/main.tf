@@ -6,13 +6,10 @@ terraform {
       version = "~> 5.0"
     }
   }
-  backend "s3" {
-    bucket         = "terraform-state-kien-prod"
-    key            = "prod/terraform.tfstate"
-    region         = "ap-southeast-1"
-    dynamodb_table = "terraform-state-lock-prod"
-    encrypt        = true
-  }
+  # Backend config is passed via -backend-config flags during terraform init in CI.
+  # Required GitHub Secrets: TF_BACKEND_BUCKET, TF_BACKEND_DYNAMODB_TABLE
+  # This makes the project portable to any AWS account without code changes.
+  backend "s3" {}
 }
 
 provider "aws" {
