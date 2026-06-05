@@ -1,7 +1,9 @@
 const orderRepository = require('../repositories/order.repository');
 const orderEmitter = require('../events/order.emitter');
-const { VerifyEmailIdentityCommand } = require('@aws-sdk/client-ses');
-const { sesClient, useLocalMock } = require('../config/aws');
+const { SubscribeCommand } = require('@aws-sdk/client-sns');
+const { snsClient, useLocalMock } = require('../config/aws');
+
+const snsTopicArn = process.env.AWS_SNS_ORDER_CREATED_ARN || process.env.SNS_TOPIC_ARN;
 
 class OrderService {
   async listOrders() {
@@ -54,18 +56,31 @@ class OrderService {
     }
 
     if (useLocalMock) {
-      console.log(`[Local Mock] Simulated sending SES verification email to: ${email}`);
-      return { success: true, message: `Mock: Verification email sent to ${email}` };
+      console.log(`[Local Mock] Simulated sending SNS subscription invitation to: ${email}`);
+      return { success: true, message: `Mock: SNS subscription invitation sent to ${email}` };
     }
 
     try {
-      console.log(`[SES Service] Sending verification request for email: ${email}`);
-      const command = new VerifyEmailIdentityCommand({ EmailAddress: email });
-      await sesClient.send(command);
-      return { success: true, message: `Verification email sent to ${email}. Please check your inbox/spam folder.` };
+      console.log(`[SNS Service] Subscribing email: ${email} to Topic: ${snsTopicArn}`);
+      if (!snsTopicArn) {
+        throw new Error('SNS Topic ARN is not configured');
+      }
+
+      const command = new SubscribeCommand({
+        TopicArn: snsTopicArn,
+        Protocol: 'email',
+        Endpoint: email,
+        Attributes: {
+          FilterPolicy: JSON.stringify({
+            email: [email]
+          })
+        }
+      });
+      await snsClient.send(command);
+      return { success: true, message: `Subscription request sent to ${email}. Please check your inbox and click 'Confirm subscription' in the email from AWS.` };
     } catch (error) {
-      console.error('[SES Service] Error requesting verification:', error);
-      throw new Error(`AWS SES Error: ${error.message}`);
+      console.error('[SNS Service] Error subscribing email:', error);
+      throw new Error(`AWS SNS Error: ${error.message}`);
     }
   }
 }

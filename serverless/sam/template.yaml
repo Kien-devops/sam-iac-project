@@ -112,66 +112,13 @@ Resources:
               ArnEquals:
                 aws:SourceArn: !Ref OrderCreatedTopic
 
-  SendEmailQueue:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: !Sub SendEmailQueue-${Environment}
-      VisibilityTimeout: 90
 
-  SNSToSendEmailQueueSubscription:
-    Type: AWS::SNS::Subscription
-    Properties:
-      TopicArn: !Ref OrderCreatedTopic
-      Endpoint: !GetAtt SendEmailQueue.Arn
-      Protocol: sqs
-
-  SendEmailQueuePolicy:
-    Type: AWS::SQS::QueuePolicy
-    Properties:
-      Queues:
-        - !Ref SendEmailQueue
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: sns.amazonaws.com
-            Action: sqs:SendMessage
-            Resource: !GetAtt SendEmailQueue.Arn
-            Condition:
-              ArnEquals:
-                aws:SourceArn: !Ref OrderCreatedTopic
 
   # =========================================================================
   # Lambda Compute Handlers
   # =========================================================================
 
-  SendEmailConfirmationFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: app.lambdaHandler
-      CodeUri: src/send-email/
-      Description: Send confirmation email upon receiving OrderCreated event.
-      Environment:
-        Variables:
-          INVOICE_BUCKET: !Ref InvoicePDFBucket
-          SENDER_EMAIL: kien07493@gmail.com
-      Policies:
-        - S3ReadPolicy:
-            BucketName: !Ref InvoicePDFBucket
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - ses:SendEmail
-                - ses:SendRawEmail
-              Resource: '*'
-      Events:
-        SQSQueueEvent:
-          Type: SQS
-          Properties:
-            Queue: !GetAtt SendEmailQueue.Arn
-            BatchSize: 10
+
 
   GenerateInvoiceFunction:
     Type: AWS::Serverless::Function

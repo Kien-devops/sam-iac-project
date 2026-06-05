@@ -17,13 +17,42 @@ class OrderEmitter {
 
     try {
       console.log(`[Event Emitter] 🔔 Publishing OrderCreated event for ${order.id} to ${snsTopicArn}...`);
+      
+      const invoiceText = `
+=========================================
+          TAX INVOICE - ORDER CREATED
+=========================================
+Invoice Number: INV-${order.id.split('-')[1] || order.id}
+Order ID: ${order.id}
+Date: ${new Date(order.createdAt).toUTCString()}
+
+Items:
+${order.items.map(item => `- ${item.name} | Qty: ${item.quantity} | Price: $${item.price}`).join('\n')}
+
+-----------------------------------------
+TOTAL AMOUNT: $${order.total}
+=========================================
+Thank you for buying from our Cloud-Native platform!
+`;
+
+      const messageObj = {
+        default: JSON.stringify(order),
+        sqs: JSON.stringify(order),
+        email: invoiceText
+      };
+
       const command = new PublishCommand({
         TopicArn: snsTopicArn,
-        Message: JSON.stringify(order),
+        Message: JSON.stringify(messageObj),
+        MessageStructure: 'json',
         MessageAttributes: {
           EventType: {
             DataType: 'String',
             StringValue: 'OrderCreated'
+          },
+          email: {
+            DataType: 'String',
+            StringValue: order.email || ''
           }
         }
       });

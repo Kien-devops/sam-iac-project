@@ -1,7 +1,0 @@
-{
-  "name": "send-email",
-  "version": "1.0.0",
-  "description": "Send email confirmations for orders",
-  "main": "app.js",
-  "dependencies": {}
-}
