@@ -99,9 +99,9 @@ module "ecs_backend" {
   memory                = var.backend_memory
   desired_count         = var.backend_desired_count
 
-  sns_topic_arn  = data.aws_cloudformation_stack.sam.outputs["OrderCreatedTopicArn"]
-  products_table = data.aws_cloudformation_stack.sam.outputs["ProductsTableName"]
-  orders_table   = data.aws_cloudformation_stack.sam.outputs["OrdersTableName"]
-  jwt_secret     = var.jwt_secret
+  sns_topic_arn                = data.aws_cloudformation_stack.sam.outputs["OrderCreatedTopicArn"]
+  products_table               = data.aws_cloudformation_stack.sam.outputs["ProductsTableName"]
+  orders_table                 = data.aws_cloudformation_stack.sam.outputs["OrdersTableName"]
+  jwt_secret                   = var.jwt_secret
   email_notification_topic_arn = data.aws_cloudformation_stack.sam.outputs["EmailNotificationTopicArn"]
 }
