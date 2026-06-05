@@ -143,6 +143,15 @@ Resources:
                 aws:SourceArn: !Ref OrderCreatedTopic
 
   # =========================================================================
+  # SNS Topic for Email Notifications (tách riêng khỏi OrderCreatedTopic)
+  # =========================================================================
+
+  EmailNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub EmailNotificationTopic-${Environment}
+
+  # =========================================================================
   # Lambda Compute Handlers
   # =========================================================================
 
@@ -151,7 +160,17 @@ Resources:
     Properties:
       Handler: app.lambdaHandler
       CodeUri: src/send-email/
-      Description: Process email queue events. Actual email delivery handled by SNS email subscriptions.
+      Description: Read from SQS, build invoice, publish to EmailNotificationTopic for delivery.
+      Environment:
+        Variables:
+          EMAIL_TOPIC_ARN: !Ref EmailNotificationTopic
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !Ref EmailNotificationTopic
       Events:
         SQSQueueEvent:
           Type: SQS
@@ -221,3 +240,7 @@ Outputs:
     Value: !Ref OrderCreatedTopic
     Export:
       Name: !Sub ${AWS::StackName}-OrderCreatedTopicArn
+  EmailNotificationTopicArn:
+    Value: !Ref EmailNotificationTopic
+    Export:
+      Name: !Sub ${AWS::StackName}-EmailNotificationTopicArn

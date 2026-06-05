@@ -3,7 +3,8 @@ const orderEmitter = require('../events/order.emitter');
 const { SubscribeCommand } = require('@aws-sdk/client-sns');
 const { snsClient, useLocalMock } = require('../config/aws');
 
-const snsTopicArn = process.env.AWS_SNS_ORDER_CREATED_ARN || process.env.SNS_TOPIC_ARN;
+// Topic riêng dành cho gửi email thông báo cho khách hàng
+const emailTopicArn = process.env.EMAIL_NOTIFICATION_TOPIC_ARN;
 
 class OrderService {
   async listOrders() {
@@ -61,12 +62,12 @@ class OrderService {
     }
 
     try {
-      if (!snsTopicArn) {
-        throw new Error('SNS Topic ARN is not configured');
+      if (!emailTopicArn) {
+        throw new Error('Email Notification Topic ARN is not configured');
       }
-      console.log(`[SNS Service] Subscribing email: ${email} to Topic: ${snsTopicArn}`);
+      console.log(`[SNS Service] Subscribing email: ${email} to EmailNotificationTopic: ${emailTopicArn}`);
       const command = new SubscribeCommand({
-        TopicArn: snsTopicArn,
+        TopicArn: emailTopicArn,
         Protocol: 'email',
         Endpoint: email,
         Attributes: {

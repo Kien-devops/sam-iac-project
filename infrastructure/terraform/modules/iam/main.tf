@@ -88,14 +88,10 @@ resource "aws_iam_policy" "ecs_task_permissions" {
           "sns:Publish",
           "sns:Subscribe"
         ]
-        Resource = "arn:aws:sns:*:*:OrderCreatedTopic-*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ses:VerifyEmailIdentity"
+        Resource = [
+          "arn:aws:sns:*:*:OrderCreatedTopic-*",
+          "arn:aws:sns:*:*:EmailNotificationTopic-*"
         ]
-        Resource = "*"
       },
       {
         Effect = "Allow"

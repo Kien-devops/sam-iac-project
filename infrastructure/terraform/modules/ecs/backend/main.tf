@@ -75,6 +75,10 @@ resource "aws_ecs_task_definition" "backend" {
         {
           name  = "JWT_SECRET"
           value = var.jwt_secret
+        },
+        {
+          name  = "EMAIL_NOTIFICATION_TOPIC_ARN"
+          value = var.email_notification_topic_arn
         }
       ]
       logConfiguration = {

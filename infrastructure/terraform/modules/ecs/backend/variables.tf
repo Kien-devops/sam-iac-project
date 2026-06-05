@@ -96,3 +96,9 @@ variable "jwt_secret" {
   type        = string
   description = "JWT secret key for backend authentication"
 }
+
+variable "email_notification_topic_arn" {
+  type        = string
+  description = "SNS Email Notification Topic ARN for subscribing customer emails"
+  default     = ""
+}
