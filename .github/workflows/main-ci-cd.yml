@@ -165,22 +165,91 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           cd ${{ env.TF_WORKING_DIR }}
-          # Import existing resources that may have been created in a previous failed run.
-          # Each import is wrapped in || true so it is skipped if already in state or not found.
           REGION="${{ env.AWS_REGION }}"
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
-          # ECS Cluster
-          aws ecs describe-clusters --clusters prod-cluster --region $REGION --query "clusters[0].status" --output text 2>/dev/null | grep -q ACTIVE \
-            && terraform import aws_ecs_cluster.main arn:aws:ecs:$REGION:$ACCOUNT_ID:cluster/prod-cluster || true
+          # Helper: run import only if resource exists in AWS (idempotent - skips if already in state)
+          tf_import() {
+            local addr="$1"
+            local id="$2"
+            echo "→ Importing $addr ($id)..."
+            terraform import "$addr" "$id" 2>&1 | grep -v "Resource already managed" || true
+          }
 
-          # ECR Repositories
+          # ── ECS Cluster ──────────────────────────────────────────────
+          aws ecs describe-clusters --clusters prod-cluster --region $REGION \
+            --query "clusters[0].status" --output text 2>/dev/null | grep -q "ACTIVE" \
+            && tf_import aws_ecs_cluster.main "arn:aws:ecs:$REGION:$ACCOUNT_ID:cluster/prod-cluster" || true
+
+          # ── ECR Repositories ─────────────────────────────────────────
           aws ecr describe-repositories --repository-names prod-backend --region $REGION &>/dev/null \
-            && terraform import module.ecr.aws_ecr_repository.backend prod-backend || true
+            && tf_import module.ecr.aws_ecr_repository.backend "prod-backend" || true
           aws ecr describe-repositories --repository-names prod-frontend --region $REGION &>/dev/null \
-            && terraform import module.ecr.aws_ecr_repository.frontend prod-frontend || true
+            && tf_import module.ecr.aws_ecr_repository.frontend "prod-frontend" || true
 
-          echo "Import step complete."
+          # ── ECR Lifecycle Policies ────────────────────────────────────
+          aws ecr get-lifecycle-policy --repository-name prod-backend --region $REGION &>/dev/null \
+            && tf_import module.ecr.aws_ecr_lifecycle_policy.backend "prod-backend" || true
+          aws ecr get-lifecycle-policy --repository-name prod-frontend --region $REGION &>/dev/null \
+            && tf_import module.ecr.aws_ecr_lifecycle_policy.frontend "prod-frontend" || true
+
+          # ── IAM Roles ────────────────────────────────────────────────
+          aws iam get-role --role-name prod-ecs-execution-role &>/dev/null \
+            && tf_import module.iam.aws_iam_role.ecs_execution_role "prod-ecs-execution-role" || true
+          aws iam get-role --role-name prod-ecs-task-role &>/dev/null \
+            && tf_import module.iam.aws_iam_role.ecs_task_role "prod-ecs-task-role" || true
+
+          # ── IAM Policies ─────────────────────────────────────────────
+          EXEC_POLICY_ARN="arn:aws:iam::$ACCOUNT_ID:policy/prod-ecs-execution-secrets-policy"
+          aws iam get-policy --policy-arn $EXEC_POLICY_ARN &>/dev/null \
+            && tf_import module.iam.aws_iam_policy.ecs_execution_secrets "$EXEC_POLICY_ARN" || true
+
+          TASK_POLICY_ARN="arn:aws:iam::$ACCOUNT_ID:policy/prod-ecs-task-permissions-policy"
+          aws iam get-policy --policy-arn $TASK_POLICY_ARN &>/dev/null \
+            && tf_import module.iam.aws_iam_policy.ecs_task_permissions "$TASK_POLICY_ARN" || true
+
+          # ── IAM Role Policy Attachments ───────────────────────────────
+          aws iam list-attached-role-policies --role-name prod-ecs-execution-role \
+            --query "AttachedPolicies[?PolicyArn=='arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'].PolicyArn" \
+            --output text 2>/dev/null | grep -q "AmazonECSTaskExecutionRolePolicy" \
+            && tf_import module.iam.aws_iam_role_policy_attachment.ecs_execution_policy \
+               "prod-ecs-execution-role/arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy" || true
+          aws iam list-attached-role-policies --role-name prod-ecs-execution-role \
+            --query "AttachedPolicies[?PolicyArn=='$EXEC_POLICY_ARN'].PolicyArn" \
+            --output text 2>/dev/null | grep -q "prod-ecs-execution-secrets-policy" \
+            && tf_import module.iam.aws_iam_role_policy_attachment.ecs_execution_custom \
+               "prod-ecs-execution-role/$EXEC_POLICY_ARN" || true
+          aws iam list-attached-role-policies --role-name prod-ecs-task-role \
+            --query "AttachedPolicies[?PolicyArn=='$TASK_POLICY_ARN'].PolicyArn" \
+            --output text 2>/dev/null | grep -q "prod-ecs-task-permissions-policy" \
+            && tf_import module.iam.aws_iam_role_policy_attachment.ecs_task_custom \
+               "prod-ecs-task-role/$TASK_POLICY_ARN" || true
+
+          # ── CloudWatch Log Groups ─────────────────────────────────────
+          aws logs describe-log-groups --log-group-name-prefix "/ecs/hybrid-devops-backend-prod" \
+            --query "logGroups[0].logGroupName" --output text 2>/dev/null | grep -q "backend" \
+            && tf_import module.monitoring.aws_cloudwatch_log_group.backend "/ecs/hybrid-devops-backend-prod" || true
+          aws logs describe-log-groups --log-group-name-prefix "/ecs/hybrid-devops-frontend-prod" \
+            --query "logGroups[0].logGroupName" --output text 2>/dev/null | grep -q "frontend" \
+            && tf_import module.monitoring.aws_cloudwatch_log_group.frontend "/ecs/hybrid-devops-frontend-prod" || true
+
+          # ── ALB & Target Groups ───────────────────────────────────────
+          ALB_ARN=$(aws elbv2 describe-load-balancers --names prod-alb --region $REGION \
+            --query "LoadBalancers[0].LoadBalancerArn" --output text 2>/dev/null || echo "")
+          [ -n "$ALB_ARN" ] && [ "$ALB_ARN" != "None" ] \
+            && tf_import module.alb.aws_lb.main "$ALB_ARN" || true
+
+          TG_BACKEND_ARN=$(aws elbv2 describe-target-groups --names prod-tg-backend --region $REGION \
+            --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "")
+          [ -n "$TG_BACKEND_ARN" ] && [ "$TG_BACKEND_ARN" != "None" ] \
+            && tf_import module.alb.aws_lb_target_group.backend "$TG_BACKEND_ARN" || true
+
+          TG_FRONTEND_ARN=$(aws elbv2 describe-target-groups --names prod-tg-frontend --region $REGION \
+            --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "")
+          [ -n "$TG_FRONTEND_ARN" ] && [ "$TG_FRONTEND_ARN" != "None" ] \
+            && tf_import module.alb.aws_lb_target_group.frontend "$TG_FRONTEND_ARN" || true
+
+          echo "✅ Import step complete."
 
       - name: Terraform Plan
         id: plan
