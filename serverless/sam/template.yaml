@@ -152,6 +152,20 @@ Resources:
       Handler: app.lambdaHandler
       CodeUri: src/send-email/
       Description: Send confirmation email upon receiving OrderCreated event.
+      Environment:
+        Variables:
+          INVOICE_BUCKET: !Ref InvoicePDFBucket
+          SENDER_EMAIL: kien_test_sns@mailinator.com
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref InvoicePDFBucket
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: '*'
       Events:
         SQSQueueEvent:
           Type: SQS
