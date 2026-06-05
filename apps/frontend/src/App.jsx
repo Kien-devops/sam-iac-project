@@ -23,6 +23,7 @@ function App() {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [backendStatus, setBackendStatus] = useState('checking');
+  const [customerEmail, setCustomerEmail] = useState('kien_test_sns@mailinator.com');
   
   // Form states
   const [newProduct, setNewProduct] = useState({ name: '', price: '', category: 'Electronics', description: '' });
@@ -106,18 +107,11 @@ function App() {
   };
 
   const handleBuyProduct = async (product) => {
-    let email = '';
-    if (backendStatus === 'online') {
-      const inputEmail = window.prompt("Enter your email address to receive order updates via AWS SNS:");
-      if (inputEmail === null) {
-        return;
-      }
-      if (!inputEmail.trim() || !inputEmail.includes('@')) {
-        showNotification('error', 'Please enter a valid email address.');
-        return;
-      }
-      email = inputEmail.trim();
+    if (!customerEmail || !customerEmail.trim() || !customerEmail.includes('@')) {
+      showNotification('error', 'Please enter a valid email address in the "Customer Notification Email" field.');
+      return;
     }
+    const email = customerEmail.trim();
 
     setLoadingOrder(true);
     try {
@@ -317,6 +311,26 @@ function App() {
                 <h3 style={{ fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Package size={20} className="gradient-text" /> Active Catalog
                 </h3>
+
+                {/* Customer Notification Email Card */}
+                <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <h4 style={{ fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    <Mail size={16} className="gradient-text" /> Customer Notification Email
+                  </h4>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    Enter your email to receive order updates and PDF invoices automatically via AWS SNS and SES.
+                  </p>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <input 
+                      type="email" 
+                      className="input-field" 
+                      placeholder="e.g., customer@example.com"
+                      value={customerEmail}
+                      onChange={e => setCustomerEmail(e.target.value)}
+                      style={{ flex: 1, padding: '12px', fontSize: '0.9rem' }}
+                    />
+                  </div>
+                </div>
                 
                 {products.length === 0 ? (
                   <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
