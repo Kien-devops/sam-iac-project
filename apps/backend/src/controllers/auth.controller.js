@@ -52,7 +52,10 @@ class AuthController {
           const command = new SubscribeCommand({
             TopicArn: topicArn,
             Protocol: 'email',
-            Endpoint: email
+            Endpoint: email,
+            Attributes: {
+              FilterPolicy: JSON.stringify({ email: [email] })
+            }
           });
           await snsClient.send(command);
           console.log(`[SNS] Subscribed ${email} to ${topicArn}`);
@@ -123,7 +126,10 @@ class AuthController {
           const subCommand = new SubscribeCommand({
             TopicArn: topicArn,
             Protocol: 'email',
-            Endpoint: user.email
+            Endpoint: user.email,
+            Attributes: {
+              FilterPolicy: JSON.stringify({ email: [user.email] })
+            }
           });
           await snsClient.send(subCommand);
           return res.status(400).json({
