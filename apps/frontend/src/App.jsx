@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Header from './components/layout/Header';
-import Footer from './components/layout/Footer';
+
 import ProductList from './components/products/ProductList';
 import ProductDetailModal from './components/products/ProductDetailModal';
 import CartDrawer from './components/cart/CartDrawer';
@@ -8,7 +8,6 @@ import CheckoutWizard from './components/checkout/CheckoutWizard';
 import OrderHistory from './components/orders/OrderHistory';
 import InvoiceModal from './components/orders/InvoiceModal';
 import ProductForm from './components/admin/ProductForm';
-import ArchDevOps from './components/devops/ArchDevOps';
 import AuthModal from './components/layout/AuthModal';
 
 import { useProducts } from './hooks/useProducts';
@@ -58,13 +57,13 @@ function App() {
       const isOnline = await apiService.checkHealth();
       setBackendStatus(isOnline ? 'online' : 'offline');
       if (isOnline) {
-        addNotification('success', 'Connected to AWS Event API backend.');
+        addNotification('success', 'Connected to server.');
       } else {
-        addNotification('warning', 'Backend is offline. Running with offline simulation database.');
+        addNotification('warning', 'Offline mode: using local database.');
       }
     } catch (e) {
       setBackendStatus('offline');
-      addNotification('warning', 'Backend is offline. Running with offline simulation database.');
+      addNotification('warning', 'Offline mode: using local database.');
     }
   };
 
@@ -217,11 +216,6 @@ function App() {
           />
         )}
 
-        {/* Tab 4: Architecture */}
-        {activeTab === 'system' && (
-          <ArchDevOps />
-        )}
-
       </main>
 
       {/* Sidebar Drawers & Modal Dialogs */}
@@ -301,8 +295,6 @@ function App() {
         />
       )}
 
-      {/* Platform Footer */}
-      <Footer />
 
     </div>
   );

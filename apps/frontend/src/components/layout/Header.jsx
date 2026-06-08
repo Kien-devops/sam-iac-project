@@ -1,6 +1,7 @@
 import React from 'react';
-import { ShoppingCart, Cpu, RefreshCw, Layers, History, LayoutGrid, Terminal, LogIn, LogOut, User } from 'lucide-react';
+import { ShoppingCart, ShoppingBag, RefreshCw, History, LayoutGrid, Terminal, LogIn, LogOut, User } from 'lucide-react';
 import { formatPrice } from '../../utils/format';
+import logoImg from '../../assets/shopee_fake_logo.png';
 
 export default function Header({
   backendStatus,
@@ -21,8 +22,8 @@ export default function Header({
         {/* Brand/Logo Section */}
         <div className="logo-container">
           <button className="logo-link" onClick={() => setActiveTab('products')} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none' }}>
-            <Cpu size={16} className="text-primary" />
-            <h1 className="brand-title">hybridcloud</h1>
+            <img src={logoImg} alt="Shopee Fake" style={{ width: '26px', height: '26px', borderRadius: '4px', objectFit: 'cover' }} />
+            <h1 className="brand-title">shopee fake</h1>
           </button>
         </div>
 
@@ -52,36 +53,11 @@ export default function Header({
             <Terminal size={14} />
             <span>Admin Panel</span>
           </button>
-          
-          <button 
-            className={`tab-btn ${activeTab === 'system' ? 'active' : ''}`}
-            onClick={() => setActiveTab('system')}
-          >
-            <Layers size={14} />
-            <span>DevOps</span>
-          </button>
         </nav>
 
         {/* Status Indicators & User Auth & Cart Trigger */}
         <div className="action-group">
-          {/* Health Indicators */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div className={`connection-status-pill ${backendStatus === 'offline' ? 'offline' : ''}`}>
-              <span className="status-dot"></span>
-              <span>Backend: {backendStatus === 'checking' ? 'SYNCING' : backendStatus.toUpperCase()}</span>
-              <button 
-                onClick={onRetryHealth}
-                style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: '0 2px', display: 'flex', alignItems: 'center' }}
-                title="Retry Connection"
-                disabled={backendStatus === 'checking'}
-              >
-                <RefreshCw 
-                  size={10} 
-                  className={backendStatus === 'checking' ? 'animate-spin' : ''} 
-                />
-              </button>
-            </div>
-          </div>
+
 
           {/* Authentication Section */}
           <div className="auth-header-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

@@ -90,13 +90,13 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, notify }) {
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
           <h2 className="section-title" style={{ fontSize: '1.4rem' }}>
             {mode === 'login' && 'Login to Platform'}
-            {mode === 'register' && 'Create Cloud Account'}
-            {mode === 'verify' && 'Verify Email (SNS)'}
+            {mode === 'register' && 'Register New Account'}
+            {mode === 'verify' && 'Verify Account'}
           </h2>
           <p className="section-subtitle">
             {mode === 'login' && 'Access your orders and catalog controls'}
-            {mode === 'register' && 'Register your identity on DynamoDB'}
-            {mode === 'verify' && 'Confirm email subscription to proceed'}
+            {mode === 'register' && 'Sign up to shop or manage catalog'}
+            {mode === 'verify' && 'Confirm your account creation'}
           </p>
         </div>
 
@@ -148,7 +148,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, notify }) {
                   id="login-username"
                   type="text"
                   className="input-field"
-                  placeholder="e.g. admin or user123"
+                  placeholder="Enter username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   disabled={loading}
@@ -185,7 +185,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, notify }) {
             </button>
 
             <div style={{ textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '8px' }}>
-              Want to skip credentials? Use <strong style={{ color: 'var(--primary)' }}>admin / admin</strong>
+              Demo Account: <strong style={{ color: 'var(--primary)' }}>admin / admin</strong>
             </div>
           </form>
         )}
@@ -243,24 +243,6 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, notify }) {
               </div>
             </div>
 
-            <div className="input-group">
-              <label className="input-label" htmlFor="register-role">System Role</label>
-              <div style={{ position: 'relative' }}>
-                <select
-                  id="register-role"
-                  className="input-field"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  disabled={loading}
-                  style={{ paddingLeft: '36px', width: '100%', appearance: 'none', background: 'var(--bg-tertiary)' }}
-                >
-                  <option value="user">User Role (Purchase Only)</option>
-                  <option value="admin">Admin Role (Full Catalog Controls)</option>
-                </select>
-                <Shield size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              </div>
-            </div>
-
             <button
               type="submit"
               className="action-primary-btn"
@@ -279,7 +261,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, notify }) {
             </div>
 
             <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-              We have dispatched a registration email. In AWS production, you must confirm the SNS email verification link.
+              We have sent a verification email to your address. Please click the link in the email to activate your account.
             </p>
 
             <div className="input-group" style={{ textAlign: 'left' }}>
@@ -301,7 +283,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, notify }) {
               disabled={loading}
               style={{ width: '100%', padding: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
             >
-              {loading ? 'Verifying Account...' : 'Confirm Verification (SNS Subscription)'}
+              {loading ? 'Verifying Account...' : 'Activate Account'}
             </button>
 
             <button

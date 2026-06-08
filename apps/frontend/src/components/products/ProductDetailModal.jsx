@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, ShoppingCart, ShieldCheck, Truck, RefreshCcw } from 'lucide-react';
+import { X, ShoppingCart } from 'lucide-react';
 import { formatPrice } from '../../utils/format';
 
 export default function ProductDetailModal({ product, onClose, onAddToCart }) {
@@ -81,32 +81,6 @@ export default function ProductDetailModal({ product, onClose, onAddToCart }) {
             </div>
           </div>
 
-          {/* Badges / Commitments */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '24px' }}>
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-              <ShieldCheck size={16} style={{ color: 'var(--primary)', marginTop: '2px' }} />
-              <div>
-                <h5 style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>Secure Transaction</h5>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Encrypted order routing via AWS Key Management Service (KMS)</p>
-              </div>
-            </div>
-            
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-              <Truck size={16} style={{ color: 'var(--primary)', marginTop: '2px' }} />
-              <div>
-                <h5 style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>Expedited Shipping</h5>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Automatic order matching. Leaves warehouse in 24 hours</p>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-              <RefreshCcw size={16} style={{ color: 'var(--primary)', marginTop: '2px' }} />
-              <div>
-                <h5 style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>Hassle-Free Returns</h5>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>30-day return policy. Customer satisfaction guarantee</p>
-              </div>
-            </div>
-          </div>
 
         </div>
 
