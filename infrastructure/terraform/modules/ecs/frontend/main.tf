@@ -5,8 +5,8 @@ resource "aws_security_group" "ecs_tasks" {
 
   ingress {
     protocol        = "tcp"
-    from_port       = 80
-    to_port         = 80
+    from_port       = 8080
+    to_port         = 8080
     security_groups = [var.alb_security_group_id]
   }
 
@@ -39,8 +39,8 @@ resource "aws_ecs_task_definition" "frontend" {
       essential = true
       portMappings = [
         {
-          containerPort = 80
-          hostPort      = 80
+          containerPort = 8080
+          hostPort      = 8080
         }
       ]
       logConfiguration = {
@@ -75,7 +75,7 @@ resource "aws_ecs_service" "frontend" {
   load_balancer {
     target_group_arn = var.target_group_arn
     container_name   = "frontend"
-    container_port   = 80
+    container_port   = 8080
   }
 
   # Prevent Terraform from reverting deployment tags pushed by GitHub Actions
