@@ -80,7 +80,7 @@ resource "aws_ecs_service" "frontend" {
 
   # Prevent Terraform from reverting deployment tags pushed by GitHub Actions
   lifecycle {
-    ignore_changes = [/*task_definition,*/ desired_count]
+    ignore_changes = [task_definition, desired_count]
   }
 
   tags = {
