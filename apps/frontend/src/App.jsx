@@ -16,7 +16,26 @@ import { useOrders } from './hooks/useOrders';
 import { apiService } from './services/api';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('products');
+  const [activeTab, setActiveTabState] = useState(() => {
+    const hash = window.location.hash.replace('#', '');
+    return ['products', 'orders', 'admin'].includes(hash) ? hash : 'products';
+  });
+
+  const setActiveTab = (tab) => {
+    setActiveTabState(tab);
+    window.location.hash = tab;
+  };
+
+  useEffect(() => {
+    const onHashChange = () => {
+      const hash = window.location.hash.replace('#', '');
+      if (['products', 'orders', 'admin'].includes(hash)) {
+        setActiveTabState(hash);
+      }
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
   const [selectedProductDetail, setSelectedProductDetail] = useState(null);
   const [viewingInvoice, setViewingInvoice] = useState(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -277,8 +296,10 @@ function App() {
             const completedOrder = await placeOrder(cart, getTotal(), shippingInfo);
             if (completedOrder) {
               clearCart();
-              refreshProducts(); // refresh stock counts
-              refreshOrders(); // refresh order logs list
+              refreshProducts();
+              refreshOrders();
+              refreshPurchasedItems();
+              setTimeout(() => setActiveTab('orders'), 1500);
               return completedOrder;
             }
             return null;
