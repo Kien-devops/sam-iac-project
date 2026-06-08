@@ -102,3 +102,16 @@ variable "email_notification_topic_arn" {
   description = "SNS Email Notification Topic ARN for subscribing customer emails"
   default     = ""
 }
+
+variable "users_table" {
+  type        = string
+  description = "DynamoDB Users table name"
+  default     = ""
+}
+
+variable "invoice_bucket" {
+  type        = string
+  description = "S3 Invoice bucket name"
+  default     = ""
+}
+

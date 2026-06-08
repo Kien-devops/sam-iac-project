@@ -3,7 +3,9 @@ import { apiService } from '../services/api';
 
 export function useOrders(backendStatus, notify) {
   const [orders, setOrders] = useState([]);
+  const [purchasedItems, setPurchasedItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingPurchased, setLoadingPurchased] = useState(false);
   const [loadingOrder, setLoadingOrder] = useState(false);
   const [loadingVerify, setLoadingVerify] = useState(false);
 
@@ -21,11 +23,24 @@ export function useOrders(backendStatus, notify) {
     localStorage.setItem('hybrid-email-status', verificationStatus);
   }, [customerEmail, verificationStatus]);
 
+  const fetchPurchasedItems = async () => {
+    setLoadingPurchased(true);
+    try {
+      const data = await apiService.getUserPurchasedItems();
+      setPurchasedItems(data);
+    } catch (e) {
+      console.warn("Failed to retrieve purchased items:", e);
+    } finally {
+      setLoadingPurchased(false);
+    }
+  };
+
   const fetchOrders = async () => {
     setLoading(true);
     try {
       const data = await apiService.getOrders();
       setOrders(data);
+      await fetchPurchasedItems();
     } catch (e) {
       if (notify) notify('error', 'Failed to retrieve order history logs.');
     } finally {
@@ -69,10 +84,6 @@ export function useOrders(backendStatus, notify) {
 
   const handlePlaceOrder = async (cartItems, total, shippingInfo) => {
     if (cartItems.length === 0) return null;
-    if (verificationStatus !== 'verified' && backendStatus === 'online') {
-      if (notify) notify('error', 'Your email must be verified before checkout.');
-      return null;
-    }
 
     setLoadingOrder(true);
     try {
@@ -87,9 +98,9 @@ export function useOrders(backendStatus, notify) {
       setOrders(prev => [completedOrder, ...prev]);
       if (notify) {
         if (completedOrder.simulated) {
-          notify('warning', 'Simulated checkout completed locally.');
+          notify('warning', 'Order placed! Proceed to pay to generate invoice.');
         } else {
-          notify('success', 'Order created successfully! Check email for receipt.');
+          notify('success', 'Order placed successfully! Proceed to pay to generate invoice.');
         }
       }
       return completedOrder;
@@ -98,6 +109,38 @@ export function useOrders(backendStatus, notify) {
       return null;
     } finally {
       setLoadingOrder(false);
+    }
+  };
+
+  const handlePayOrder = async (orderId) => {
+    setLoadingOrder(true);
+    try {
+      const updatedOrder = await apiService.payOrder(orderId);
+      setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
+      if (notify) notify('success', 'Payment processed successfully! S3 Tax Invoice generated.');
+      return updatedOrder;
+    } catch (error) {
+      if (notify) notify('error', error.message || 'Payment simulation failed.');
+      return null;
+    } finally {
+      setLoadingOrder(false);
+    }
+  };
+
+  const handleDownloadInvoice = async (orderId) => {
+    try {
+      const content = await apiService.downloadInvoice(orderId);
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `invoice-${orderId}.txt`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      if (notify) notify('success', 'Tax Invoice file downloaded.');
+    } catch (error) {
+      if (notify) notify('error', 'Failed to download invoice file.');
     }
   };
 
@@ -113,6 +156,11 @@ export function useOrders(backendStatus, notify) {
     verifyEmail: handleVerifyEmail,
     confirmVerificationSimulated,
     placeOrder: handlePlaceOrder,
-    refreshOrders: fetchOrders
+    payOrder: handlePayOrder,
+    downloadInvoice: handleDownloadInvoice,
+    refreshOrders: fetchOrders,
+    purchasedItems,
+    loadingPurchased,
+    refreshPurchasedItems: fetchPurchasedItems
   };
 }

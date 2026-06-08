@@ -86,7 +86,8 @@ resource "aws_iam_policy" "ecs_task_permissions" {
         Effect = "Allow"
         Action = [
           "sns:Publish",
-          "sns:Subscribe"
+          "sns:Subscribe",
+          "sns:ListSubscriptionsByTopic"
         ]
         Resource = [
           "arn:aws:sns:*:*:OrderCreatedTopic-*",
@@ -105,7 +106,17 @@ resource "aws_iam_policy" "ecs_task_permissions" {
         ]
         Resource = [
           "arn:aws:dynamodb:*:*:table/ProductsTable-*",
-          "arn:aws:dynamodb:*:*:table/OrdersTable-*"
+          "arn:aws:dynamodb:*:*:table/OrdersTable-*",
+          "arn:aws:dynamodb:*:*:table/UsersTable-*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject"
+        ]
+        Resource = [
+          "arn:aws:s3:::*"
         ]
       }
     ]

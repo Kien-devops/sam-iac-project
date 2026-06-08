@@ -44,9 +44,18 @@ describe('E-Commerce Express App API Endpoints', () => {
   });
 
   describe('POST /api/orders', () => {
+    let token;
+    beforeAll(async () => {
+      const res = await request(app)
+        .post('/api/auth/login')
+        .send({ username: 'admin', password: 'admin' });
+      token = res.body.token;
+    });
+
     it('should accept valid order items and trigger order creation', async () => {
       const res = await request(app)
         .post('/api/orders')
+        .set('Authorization', `Bearer ${token}`)
         .send({
           items: [
             { productId: '1', name: 'MacBook Pro M3 Max', price: 3499, quantity: 1 }
@@ -55,12 +64,13 @@ describe('E-Commerce Express App API Endpoints', () => {
       expect(res.statusCode).toEqual(201);
       expect(res.body).toHaveProperty('id');
       expect(res.body).toHaveProperty('total', 3499);
-      expect(res.body).toHaveProperty('status', 'Processing');
+      expect(res.body).toHaveProperty('status', 'PendingPayment');
     });
 
     it('should reject empty order payloads', async () => {
       const res = await request(app)
         .post('/api/orders')
+        .set('Authorization', `Bearer ${token}`)
         .send({});
       expect(res.statusCode).toEqual(400);
     });

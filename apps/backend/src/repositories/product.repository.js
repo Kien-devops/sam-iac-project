@@ -51,6 +51,48 @@ class ProductRepository {
       return newProduct;
     }
   }
+
+  async update(id, productData) {
+    const updatedProduct = { id, ...productData };
+    if (useLocalMock) {
+      mockProducts = mockProducts.map(p => p.id === id ? updatedProduct : p);
+      return updatedProduct;
+    }
+    try {
+      const { PutCommand } = require('@aws-sdk/lib-dynamodb');
+      const command = new PutCommand({
+        TableName: tableName,
+        Item: updatedProduct
+      });
+      await dynamoDocClient.send(command);
+      return updatedProduct;
+    } catch (error) {
+      console.error('[ProductRepository] Error updating in DynamoDB:', error);
+      mockProducts = mockProducts.map(p => p.id === id ? updatedProduct : p);
+      return updatedProduct;
+    }
+  }
+
+  async delete(id) {
+    if (useLocalMock) {
+      mockProducts = mockProducts.filter(p => p.id !== id);
+      return true;
+    }
+    try {
+      const { DeleteCommand } = require('@aws-sdk/lib-dynamodb');
+      const command = new DeleteCommand({
+        TableName: tableName,
+        Key: { id }
+      });
+      await dynamoDocClient.send(command);
+      return true;
+    } catch (error) {
+      console.error('[ProductRepository] Error deleting from DynamoDB:', error);
+      mockProducts = mockProducts.filter(p => p.id !== id);
+      return true;
+    }
+  }
 }
 
 module.exports = new ProductRepository();
+

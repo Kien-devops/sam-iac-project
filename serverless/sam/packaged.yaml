@@ -1,0 +1,283 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: "hybrid-devops-ecommerce-aws serverless stack Deploys SNS, SQS, DynamoDB,\
+  \ S3, and Lambda handlers for invoicing, emails, and reporting.\n"
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues:
+    - dev
+    - staging
+    - prod
+    Description: Environment stage (dev, staging, prod)
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 128
+    Runtime: nodejs20.x
+    Architectures:
+    - x86_64
+    Environment:
+      Variables:
+        ENV:
+          Ref: Environment
+        LOG_LEVEL: INFO
+Resources:
+  ProductsTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName:
+        Fn::Sub: ProductsTable-${Environment}
+      PrimaryKey:
+        Name: id
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+  OrdersTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName:
+        Fn::Sub: OrdersTable-${Environment}
+      PrimaryKey:
+        Name: id
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+  DailyReportsTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName:
+        Fn::Sub: DailyReportsTable-${Environment}
+      PrimaryKey:
+        Name: date
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+  UsersTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName:
+        Fn::Sub: UsersTable-${Environment}
+      PrimaryKey:
+        Name: id
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+  InvoicePDFBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+  OrderCreatedTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName:
+        Fn::Sub: OrderCreatedTopic-${Environment}
+  OrderCreatedQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName:
+        Fn::Sub: OrderCreatedQueue-${Environment}
+      VisibilityTimeout: 90
+  SNSToSQSSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn:
+        Ref: OrderCreatedTopic
+      Endpoint:
+        Fn::GetAtt:
+        - OrderCreatedQueue
+        - Arn
+      Protocol: sqs
+  SQSQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+      - Ref: OrderCreatedQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: sns.amazonaws.com
+          Action: sqs:SendMessage
+          Resource:
+            Fn::GetAtt:
+            - OrderCreatedQueue
+            - Arn
+          Condition:
+            ArnEquals:
+              aws:SourceArn:
+                Ref: OrderCreatedTopic
+  SendEmailQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName:
+        Fn::Sub: SendEmailQueue-${Environment}
+      VisibilityTimeout: 90
+  SNSToSendEmailQueueSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn:
+        Ref: OrderCreatedTopic
+      Endpoint:
+        Fn::GetAtt:
+        - SendEmailQueue
+        - Arn
+      Protocol: sqs
+  SendEmailQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+      - Ref: SendEmailQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: sns.amazonaws.com
+          Action: sqs:SendMessage
+          Resource:
+            Fn::GetAtt:
+            - SendEmailQueue
+            - Arn
+          Condition:
+            ArnEquals:
+              aws:SourceArn:
+                Ref: OrderCreatedTopic
+  EmailNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName:
+        Fn::Sub: EmailNotificationTopic-${Environment}
+  SendEmailConfirmationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambdaHandler
+      CodeUri: 
+        s3://sam-deploy-bucket-606030503959-ap-southeast-2/75fad5d2016cde0141f5bc6294a334c3
+      Description: Read from SQS, build invoice, publish to 
+        EmailNotificationTopic for delivery.
+      Environment:
+        Variables:
+          EMAIL_TOPIC_ARN:
+            Ref: EmailNotificationTopic
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - sns:Publish
+          Resource:
+            Ref: EmailNotificationTopic
+      Events:
+        SQSQueueEvent:
+          Type: SQS
+          Properties:
+            Queue:
+              Fn::GetAtt:
+              - SendEmailQueue
+              - Arn
+            BatchSize: 10
+  GenerateInvoiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambdaHandler
+      CodeUri: 
+        s3://sam-deploy-bucket-606030503959-ap-southeast-2/63209df342f7b9b1337951227149bdad
+      Description: Generate invoice PDF text and upload to S3 Bucket.
+      Environment:
+        Variables:
+          INVOICE_BUCKET:
+            Ref: InvoicePDFBucket
+      Policies:
+      - S3CrudPolicy:
+          BucketName:
+            Ref: InvoicePDFBucket
+      Events:
+        SQSQueueEvent:
+          Type: SQS
+          Properties:
+            Queue:
+              Fn::GetAtt:
+              - OrderCreatedQueue
+              - Arn
+            BatchSize: 10
+  DailyRevenueReportFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambdaHandler
+      CodeUri: 
+        s3://sam-deploy-bucket-606030503959-ap-southeast-2/66e698fc4295048ea89d0ad80626eaf0
+      Description: Daily scheduler to aggregate orders revenue.
+      Environment:
+        Variables:
+          ORDERS_TABLE:
+            Ref: OrdersTable
+          REPORTS_TABLE:
+            Ref: DailyReportsTable
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: OrdersTable-${Environment}
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: DailyReportsTable-${Environment}
+      Events:
+        DailyCronTrigger:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 23 * * ? *)
+            Name: DailyReportCron
+            Description: Trigger daily revenue aggregation
+            Enabled: true
+Outputs:
+  ProductsTableName:
+    Value:
+      Ref: ProductsTable
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ProductsTable
+  OrdersTableName:
+    Value:
+      Ref: OrdersTable
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-OrdersTable
+  DailyReportsTableName:
+    Value:
+      Ref: DailyReportsTable
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-DailyReportsTable
+  UsersTableName:
+    Value:
+      Ref: UsersTable
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-UsersTable
+  InvoiceBucketName:
+    Value:
+      Ref: InvoicePDFBucket
+  OrderCreatedTopicArn:
+    Value:
+      Ref: OrderCreatedTopic
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-OrderCreatedTopicArn
+  EmailNotificationTopicArn:
+    Value:
+      Ref: EmailNotificationTopic
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-EmailNotificationTopicArn

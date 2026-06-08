@@ -2,11 +2,6 @@ import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
-/**
- * Service to centralize all backend interactions.
- * If endpoints fail or backend is offline, falls back gracefully to localStorage or mock states.
- */
-
 // Mock lists fallback
 const MOCK_PRODUCTS = [
   { 
@@ -59,21 +54,13 @@ const MOCK_PRODUCTS = [
 const MOCK_ORDERS = [
   { 
     id: 'ORD-98231', 
-    customerEmail: 'devops-lead@company.com',
+    username: 'admin',
+    customerEmail: 'admin@hybridcloud.com',
     items: [{ productId: '1', name: 'MacBook Pro M3 Max', price: 3499, quantity: 1 }], 
     total: 3499, 
     status: 'Completed', 
     createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
     shipping: { fullName: 'Alex Rivera', address: '101 Cloud Street', city: 'Seattle', phone: '206-555-0199', notes: 'Leave at front desk' }
-  },
-  { 
-    id: 'ORD-12845', 
-    customerEmail: 'frontend-engineer@company.com',
-    items: [{ productId: '3', name: 'Logitech MX Master 3S', price: 99, quantity: 2 }], 
-    total: 198, 
-    status: 'Processing', 
-    createdAt: new Date().toISOString(),
-    shipping: { fullName: 'Jordan Miller', address: '456 Vpc Lane', city: 'Austin', phone: '512-555-0144', notes: 'Call upon arrival' }
   }
 ];
 
@@ -84,6 +71,12 @@ if (!localStorage.getItem('hybrid-local-products')) {
 if (!localStorage.getItem('hybrid-local-orders')) {
   localStorage.setItem('hybrid-local-orders', JSON.stringify(MOCK_ORDERS));
 }
+
+// Get JWT Token from LocalStorage for auth headers
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('hybrid-token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 export const apiService = {
   /**
@@ -100,21 +93,112 @@ export const apiService = {
   },
 
   /**
+   * Login user.
+   */
+  async login(username, password) {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/auth/login`, { username, password });
+      const { token, role, email } = response.data;
+      localStorage.setItem('hybrid-token', token);
+      localStorage.setItem('hybrid-username', username);
+      localStorage.setItem('hybrid-email', email);
+      localStorage.setItem('hybrid-role', role);
+      localStorage.setItem('hybrid-status', 'Active');
+      return response.data;
+    } catch (error) {
+      // Mock Fallback
+      if (username === 'admin' && password === 'admin') {
+        const mockRes = { token: 'mock-jwt-admin-token', username: 'admin', email: 'admin@hybridcloud.com', role: 'admin' };
+        localStorage.setItem('hybrid-token', mockRes.token);
+        localStorage.setItem('hybrid-username', mockRes.username);
+        localStorage.setItem('hybrid-email', mockRes.email);
+        localStorage.setItem('hybrid-role', mockRes.role);
+        localStorage.setItem('hybrid-status', 'Active');
+        return mockRes;
+      }
+      
+      const localUsers = JSON.parse(localStorage.getItem('hybrid-local-users') || '[]');
+      const user = localUsers.find(u => u.username === username);
+      if (user) {
+        if (user.status !== 'Active') {
+          throw new Error('Account pending verification. Please verify your email first.');
+        }
+        // Simplified password matching for mock
+        if (password === 'password' || password === username) {
+          const mockRes = { token: `mock-jwt-${user.username}`, username: user.username, email: user.email, role: user.role };
+          localStorage.setItem('hybrid-token', mockRes.token);
+          localStorage.setItem('hybrid-username', mockRes.username);
+          localStorage.setItem('hybrid-email', mockRes.email);
+          localStorage.setItem('hybrid-role', mockRes.role);
+          localStorage.setItem('hybrid-status', 'Active');
+          return mockRes;
+        }
+      }
+      
+      throw new Error(error.response?.data?.error || 'Invalid credentials');
+    }
+  },
+
+  /**
+   * Register user.
+   */
+  async register(username, email, password, role = 'user') {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/auth/register`, { username, email, password, role });
+      return response.data;
+    } catch (error) {
+      // Mock Fallback
+      const localUsers = JSON.parse(localStorage.getItem('hybrid-local-users') || '[]');
+      if (localUsers.find(u => u.username === username || u.email === email)) {
+        throw new Error('Username or email already registered');
+      }
+      const newUser = { username, email, role, status: 'PendingVerification' };
+      localUsers.push(newUser);
+      localStorage.setItem('hybrid-local-users', JSON.stringify(localUsers));
+      return { message: 'Registration successful (Mock)! Verification email sent via SNS.', username, email, status: 'PendingVerification' };
+    }
+  },
+
+  /**
+   * Verify SNS Email Registration.
+   */
+  async verifyRegistration(username) {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/auth/verify-registration`, { username });
+      return response.data;
+    } catch (error) {
+      // Mock Fallback
+      const localUsers = JSON.parse(localStorage.getItem('hybrid-local-users') || '[]');
+      const user = localUsers.find(u => u.username === username);
+      if (user) {
+        user.status = 'Active';
+        localStorage.setItem('hybrid-local-users', JSON.stringify(localUsers));
+        return { message: 'Account verified successfully (Mock Mode)!', status: 'Active' };
+      }
+      throw new Error(error.response?.data?.error || 'Verification failed');
+    }
+  },
+
+  /**
+   * Logout.
+   */
+  logout() {
+    localStorage.removeItem('hybrid-token');
+    localStorage.removeItem('hybrid-username');
+    localStorage.removeItem('hybrid-email');
+    localStorage.removeItem('hybrid-role');
+    localStorage.removeItem('hybrid-status');
+  },
+
+  /**
    * Fetch all products.
    * @returns {Promise<Array>}
    */
   async getProducts() {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/products`);
-      // Update local storage representation just in case
       if (Array.isArray(response.data)) {
-        // Extend server products with dummy stock if missing
-        const synced = response.data.map((p, idx) => ({
-          stock: p.stock !== undefined ? p.stock : (10 + (idx * 5) % 25),
-          imageUrl: p.imageUrl || `https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500&auto=format&fit=crop&q=60`,
-          ...p
-        }));
-        return synced;
+        return response.data;
       }
       return response.data;
     } catch (error) {
@@ -125,11 +209,8 @@ export const apiService = {
 
   /**
    * Create a new product.
-   * @param {Object} productData 
-   * @returns {Promise<Object>}
    */
   async createProduct(productData) {
-    // Generate default image URL if empty
     const payload = {
       ...productData,
       stock: parseInt(productData.stock || 10),
@@ -137,14 +218,12 @@ export const apiService = {
     };
 
     try {
-      const isOnline = await this.checkHealth();
-      if (isOnline) {
-        const response = await axios.post(`${API_BASE_URL}/api/products`, payload);
-        return { ...payload, ...response.data };
-      }
-      throw new Error('Offline mode');
+      const response = await axios.post(`${API_BASE_URL}/api/products`, payload, {
+        headers: getAuthHeaders()
+      });
+      return response.data;
     } catch (error) {
-      console.warn("Saving product locally due to backend offline status or limitations.");
+      console.warn("Saving product locally due to backend offline status.");
       const local = JSON.parse(localStorage.getItem('hybrid-local-products') || '[]');
       const newProd = {
         id: `mock-p-${Math.random().toString(36).substr(2, 9)}`,
@@ -158,62 +237,94 @@ export const apiService = {
 
   /**
    * Update an existing product.
-   * @param {string} id 
-   * @param {Object} productData 
-   * @returns {Promise<Object>}
    */
   async updateProduct(id, productData) {
     try {
-      // If endpoint exists on backend, we could call:
-      // const response = await axios.put(`${API_BASE_URL}/api/products/${id}`, productData);
-      // However, we simulate updates locally first so as to not break Express APIs
+      const response = await axios.put(`${API_BASE_URL}/api/products/${id}`, productData, {
+        headers: getAuthHeaders()
+      });
+      return response.data;
+    } catch (error) {
       const local = JSON.parse(localStorage.getItem('hybrid-local-products') || '[]');
       const updated = local.map(p => p.id === id ? { ...p, ...productData } : p);
       localStorage.setItem('hybrid-local-products', JSON.stringify(updated));
       return { id, ...productData };
-    } catch (error) {
-      throw error;
     }
   },
 
   /**
    * Delete a product.
-   * @param {string} id 
-   * @returns {Promise<boolean>}
    */
   async deleteProduct(id) {
     try {
-      // Simulating deletion locally
+      await axios.delete(`${API_BASE_URL}/api/products/${id}`, {
+        headers: getAuthHeaders()
+      });
+      return true;
+    } catch (error) {
       const local = JSON.parse(localStorage.getItem('hybrid-local-products') || '[]');
       const filtered = local.filter(p => p.id !== id);
       localStorage.setItem('hybrid-local-products', JSON.stringify(filtered));
       return true;
-    } catch (error) {
-      return false;
     }
   },
 
   /**
    * Fetch order history.
-   * @returns {Promise<Array>}
    */
   async getOrders() {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/orders`);
-      if (Array.isArray(response.data)) {
-        return response.data;
-      }
+      const response = await axios.get(`${API_BASE_URL}/api/orders`, {
+        headers: getAuthHeaders()
+      });
       return response.data;
     } catch (error) {
       console.warn("Backend orders fetch failed. Reading from local logs database.");
-      return JSON.parse(localStorage.getItem('hybrid-local-orders') || '[]');
+      const username = localStorage.getItem('hybrid-username') || 'guest';
+      const allOrders = JSON.parse(localStorage.getItem('hybrid-local-orders') || '[]');
+      // Filter by username if not admin
+      const role = localStorage.getItem('hybrid-role');
+      if (role === 'admin') {
+        return allOrders;
+      }
+      return allOrders.filter(o => o.username === username);
+    }
+  },
+
+  /**
+   * Fetch user purchased items list from S3.
+   */
+  async getUserPurchasedItems() {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/orders/user/purchased`, {
+        headers: getAuthHeaders()
+      });
+      return response.data;
+    } catch (error) {
+      console.warn("Backend purchased items fetch failed. Reading from local paid orders.");
+      const username = localStorage.getItem('hybrid-username') || 'guest';
+      const allOrders = JSON.parse(localStorage.getItem('hybrid-local-orders') || '[]');
+      const userOrders = allOrders.filter(o => o.username === username);
+      const paidOrders = userOrders.filter(o => o.status === 'Paid' || o.status === 'Completed');
+      const purchasedItems = [];
+      for (const order of paidOrders) {
+        for (const item of order.items) {
+          purchasedItems.push({
+            id: item.productId || item.id,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            purchaseDate: order.createdAt,
+            orderId: order.id
+          });
+        }
+      }
+      return purchasedItems;
     }
   },
 
   /**
    * Submit an e-commerce order.
-   * @param {Object} orderData 
-   * @returns {Promise<Object>}
    */
   async createOrder(orderData) {
     const payload = {
@@ -227,22 +338,24 @@ export const apiService = {
     };
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/orders`, payload);
-      // Successfully pushed to SNS/SQS event stream.
+      const response = await axios.post(`${API_BASE_URL}/api/orders`, payload, {
+        headers: getAuthHeaders()
+      });
       return {
         ...response.data,
-        shipping: orderData.shipping,
-        status: 'Processing'
+        shipping: orderData.shipping
       };
     } catch (error) {
       console.warn("Failed to place backend order. Saving to local simulation store.");
       const local = JSON.parse(localStorage.getItem('hybrid-local-orders') || '[]');
+      const username = localStorage.getItem('hybrid-username') || 'guest';
       const mockOrder = {
         id: `ORD-${Math.floor(10000 + Math.random() * 90000)}`,
+        username,
         customerEmail: orderData.email,
         items: payload.items,
         total: orderData.total,
-        status: 'Processing',
+        status: 'PendingPayment',
         createdAt: new Date().toISOString(),
         simulated: true,
         shipping: orderData.shipping
@@ -254,9 +367,64 @@ export const apiService = {
   },
 
   /**
+   * Confirm Payment of an order.
+   */
+  async payOrder(orderId) {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/orders/${orderId}/pay`, {}, {
+        headers: getAuthHeaders()
+      });
+      return response.data;
+    } catch (error) {
+      const local = JSON.parse(localStorage.getItem('hybrid-local-orders') || '[]');
+      const order = local.find(o => o.id === orderId);
+      if (order) {
+        order.status = 'Paid';
+        localStorage.setItem('hybrid-local-orders', JSON.stringify(local));
+        return order;
+      }
+      throw new Error(error.response?.data?.error || 'Payment failed');
+    }
+  },
+
+  /**
+   * Fetch invoice text from S3 bucket.
+   */
+  async downloadInvoice(orderId) {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/orders/${orderId}/invoice`, {
+        headers: getAuthHeaders(),
+        responseType: 'text'
+      });
+      return response.data;
+    } catch (error) {
+      // Mock Fallback invoice construction
+      const local = JSON.parse(localStorage.getItem('hybrid-local-orders') || '[]');
+      const order = local.find(o => o.id === orderId);
+      const itemsText = order ? order.items.map(item => `- ${item.name} | Qty: ${item.quantity} | Price: $${item.price}`).join('\n') : '';
+      const totalAmount = order ? order.total : 0;
+      
+      return `
+=========================================
+          TAX INVOICE - SIMULATED MOCK (OFFLINE)
+=========================================
+Invoice Number: INV-${orderId.split('-')[1] || orderId.slice(-6)}
+Order ID: ${orderId}
+Date: ${new Date().toUTCString()}
+
+Items:
+${itemsText}
+
+-----------------------------------------
+TOTAL AMOUNT: $${totalAmount}
+=========================================
+Thank you for buying from our Cloud-Native platform!
+`;
+    }
+  },
+
+  /**
    * Dispatch email verification via AWS SES.
-   * @param {string} email 
-   * @returns {Promise<Object>}
    */
   async verifyEmail(email) {
     try {

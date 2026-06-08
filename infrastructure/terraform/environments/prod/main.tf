@@ -104,4 +104,6 @@ module "ecs_backend" {
   orders_table                 = data.aws_cloudformation_stack.sam.outputs["OrdersTableName"]
   jwt_secret                   = var.jwt_secret
   email_notification_topic_arn = data.aws_cloudformation_stack.sam.outputs["EmailNotificationTopicArn"]
+  users_table                  = data.aws_cloudformation_stack.sam.outputs["UsersTableName"]
+  invoice_bucket               = data.aws_cloudformation_stack.sam.outputs["InvoiceBucketName"]
 }

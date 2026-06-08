@@ -5,7 +5,7 @@ const tableName = process.env.ORDERS_TABLE || process.env.DYNAMODB_ORDERS_TABLE 
 
 // Local mock data store
 let mockOrders = [
-  { id: 'ORD-98231', items: [{ productId: '1', name: 'MacBook Pro M3 Max', price: 3499, quantity: 1 }], total: 3499, status: 'Completed', createdAt: new Date(Date.now() - 3600000).toISOString() }
+  { id: 'ORD-98231', username: 'admin', items: [{ productId: '1', name: 'MacBook Pro M3 Max', price: 3499, quantity: 1 }], total: 3499, status: 'Completed', createdAt: new Date(Date.now() - 3600000).toISOString() }
 ];
 
 class OrderRepository {
@@ -21,6 +21,27 @@ class OrderRepository {
     } catch (error) {
       console.error('[OrderRepository] Error scanning DynamoDB:', error);
       return mockOrders;
+    }
+  }
+
+  async getByUsername(username) {
+    if (useLocalMock) {
+      return mockOrders.filter(o => o.username === username);
+    }
+
+    try {
+      const command = new ScanCommand({
+        TableName: tableName,
+        FilterExpression: 'username = :username',
+        ExpressionAttributeValues: {
+          ':username': username
+        }
+      });
+      const response = await dynamoDocClient.send(command);
+      return response.Items || [];
+    } catch (error) {
+      console.error('[OrderRepository] Error filtering orders in DynamoDB:', error);
+      return mockOrders.filter(o => o.username === username);
     }
   }
 
@@ -45,7 +66,7 @@ class OrderRepository {
   async create(order) {
     const newOrder = {
       id: `ORD-${Math.floor(10000 + Math.random() * 90000)}`,
-      status: 'Processing',
+      status: order.status || 'PendingPayment',
       createdAt: new Date().toISOString(),
       ...order
     };
@@ -68,6 +89,37 @@ class OrderRepository {
       return newOrder;
     }
   }
+
+  async updateStatus(id, status) {
+    if (useLocalMock) {
+      const order = mockOrders.find(o => o.id === id);
+      if (order) {
+        order.status = status;
+        return order;
+      }
+      return null;
+    }
+    try {
+      const order = await this.getById(id);
+      if (!order) return null;
+      order.status = status;
+      const command = new PutCommand({
+        TableName: tableName,
+        Item: order
+      });
+      await dynamoDocClient.send(command);
+      return order;
+    } catch (error) {
+      console.error('[OrderRepository] Error updating order status in DynamoDB:', error);
+      const order = mockOrders.find(o => o.id === id);
+      if (order) {
+        order.status = status;
+        return order;
+      }
+      return null;
+    }
+  }
 }
 
 module.exports = new OrderRepository();
+

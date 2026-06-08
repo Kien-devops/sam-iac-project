@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Trash2, Mail, CheckCircle2, AlertCircle, ShoppingBag, ArrowRight } from 'lucide-react';
+import { X, Trash2, Mail, CheckCircle2, AlertCircle, ShoppingBag, ArrowRight, UserCheck } from 'lucide-react';
 import { formatPrice } from '../../utils/format';
 
 export default function CartDrawer({
@@ -12,11 +12,8 @@ export default function CartDrawer({
   getTax,
   getShipping,
   getTotal,
-  customerEmail,
-  setCustomerEmail,
-  verificationStatus,
-  onVerifyEmail,
-  onConfirmVerificationSimulated,
+  currentUser,
+  onOpenAuth,
   onProceedToCheckout,
   backendStatus
 }) {
@@ -28,10 +25,8 @@ export default function CartDrawer({
   const total = getTotal();
   const isCartEmpty = cart.length === 0;
 
-  // Decide whether checkout is locked
-  const isOffline = backendStatus !== 'online';
-  // If backend is offline, we bypass the SES lock to allow testing
-  const isCheckoutLocked = isCartEmpty || (backendStatus === 'online' && verificationStatus !== 'verified');
+  // Checkout is locked if cart is empty or if user is not authenticated
+  const isCheckoutLocked = isCartEmpty || !currentUser;
 
   return (
     <div className="overlay-backdrop" onClick={onClose}>
@@ -58,66 +53,39 @@ export default function CartDrawer({
         {/* Drawer Body */}
         <div style={{ flexGrow: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '24px', paddingRight: '4px' }}>
           
-          {/* Email Verification Box */}
+          {/* Email / User Identity Box */}
           <div className="bezel-shell">
             <div className="bezel-core" style={{ padding: '16px' }}>
               <h4 style={{ fontSize: '0.8rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: 'var(--text-primary)' }}>
-                <Mail size={14} style={{ color: 'var(--primary)' }} /> Customer Identity (SES)
+                <Mail size={14} style={{ color: 'var(--primary)' }} /> Client Identity
               </h4>
 
-              {verificationStatus === 'verified' ? (
+              {currentUser ? (
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', background: 'rgba(16, 185, 129, 0.04)', border: '1px solid rgba(16, 185, 129, 0.1)', borderRadius: '6px', padding: '10px' }}>
                   <CheckCircle2 size={16} style={{ color: 'var(--accent-emerald)', marginTop: '2px' }} />
                   <div>
-                    <p style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }} className="font-mono">{customerEmail}</p>
-                    <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Email verified. Ready for checkout.</p>
-                  </div>
-                </div>
-              ) : verificationStatus === 'pending' ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', background: 'rgba(245, 158, 11, 0.04)', border: '1px solid rgba(245, 158, 11, 0.1)', borderRadius: '6px', padding: '10px' }}>
-                    <AlertCircle size={16} style={{ color: 'var(--accent-amber)', marginTop: '2px' }} />
-                    <div>
-                      <p style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }} className="font-mono">{customerEmail}</p>
-                      <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Verification link sent to real sandbox inbox.</p>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button 
-                      onClick={onConfirmVerificationSimulated}
-                      className="chip-btn"
-                      style={{ flex: 1, fontSize: '0.7rem', height: '32px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-                    >
-                      Bypass / Confirm Offline
-                    </button>
+                    <p style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }} className="font-mono">{currentUser.email}</p>
+                    <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                      Logged in as <strong style={{ color: 'var(--primary)', textTransform: 'uppercase' }}>{currentUser.username} ({currentUser.role})</strong>
+                    </p>
                   </div>
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', textAlign: 'center', padding: '8px 0' }}>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-                    {isOffline ? (
-                      "AWS backend offline. Enter email to checkout."
-                    ) : (
-                      "AWS SES Sandbox is active. Verify email address before proceeding to checkout."
-                    )}
+                    You must be authenticated with a verified DynamoDB account to place checkout orders.
                   </p>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <input
-                      type="email"
-                      className="input-field"
-                      style={{ padding: '8px 12px', fontSize: '0.8rem', flexGrow: 1 }}
-                      placeholder="customer@email.com"
-                      value={customerEmail}
-                      onChange={(e) => setCustomerEmail(e.target.value)}
-                    />
-                    <button
-                      onClick={() => onVerifyEmail(customerEmail)}
-                      className="btn-action-verify"
-                      style={{ padding: '8px 16px', fontSize: '0.8rem' }}
-                    >
-                      Verify
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => {
+                      onClose();
+                      onOpenAuth();
+                    }}
+                    className="btn-action-verify"
+                    style={{ padding: '8px 16px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                  >
+                    <UserCheck size={14} />
+                    <span>Sign In or Register</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -194,10 +162,10 @@ export default function CartDrawer({
           </div>
 
           {/* Checkout Instruction Warnings */}
-          {backendStatus === 'online' && verificationStatus !== 'verified' && (
+          {!currentUser && (
             <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', background: 'rgba(245, 158, 11, 0.04)', border: '1px solid rgba(245, 158, 11, 0.1)', borderRadius: '6px', padding: '10px', marginBottom: '12px' }}>
               <AlertCircle size={14} style={{ color: 'var(--accent-amber)', flexShrink: 0, marginTop: '2px' }} />
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Checkout locked. You must verify your email address to continue.</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Checkout locked. You must sign in with a verified account to continue.</span>
             </div>
           )}
 

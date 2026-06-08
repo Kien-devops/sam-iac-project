@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Edit3, Trash2, ShieldAlert, Check, X, Tag } from 'lucide-react';
+import { Plus, Edit3, Trash2, ShieldAlert, Check, X, Tag, Lock, ShieldX, UserCheck } from 'lucide-react';
 import { formatPrice } from '../../utils/format';
 
 export default function ProductForm({
@@ -7,7 +7,9 @@ export default function ProductForm({
   onCreateProduct,
   onUpdateProduct,
   onDeleteProduct,
-  loadingWrite
+  loadingWrite,
+  currentUser,
+  onOpenAuth
 }) {
   const [formData, setFormData] = useState({
     name: '',
@@ -68,6 +70,46 @@ export default function ProductForm({
       resetForm();
     }
   };
+
+  // 1. Check if user is not authenticated
+  if (!currentUser) {
+    return (
+      <div className="bezel-shell animate-fade-in" style={{ maxWidth: '600px', margin: '40px auto', padding: '40px 24px', textAlign: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--primary)', marginBottom: '20px' }}>
+          <Lock size={48} />
+        </div>
+        <h3 className="section-title" style={{ fontSize: '1.3rem', marginBottom: '8px' }}>Administrative Console Locked</h3>
+        <p className="section-subtitle" style={{ maxWidth: '450px', margin: '0 auto 24px auto', lineHeight: '1.4' }}>
+          Please authenticate with an Administrator identity to access product inventory management controls, stock adjustments, and listing mutations.
+        </p>
+        <button 
+          onClick={onOpenAuth}
+          className="btn-action-verify" 
+          style={{ padding: '10px 24px', fontSize: '0.85rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+        >
+          <UserCheck size={16} />
+          <span>Authenticate as Admin</span>
+        </button>
+      </div>
+    );
+  }
+
+  // 2. Check if user is logged in but has user role
+  if (currentUser.role !== 'admin') {
+    return (
+      <div className="bezel-shell animate-fade-in" style={{ maxWidth: '600px', margin: '40px auto', padding: '40px 24px', textAlign: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--accent-rose)', marginBottom: '20px' }}>
+          <ShieldX size={48} />
+        </div>
+        <h3 className="section-title" style={{ fontSize: '1.3rem', marginBottom: '8px', color: 'var(--accent-rose)' }}>Access Denied</h3>
+        <p className="section-subtitle" style={{ maxWidth: '450px', margin: '0 auto 24px auto', lineHeight: '1.4' }}>
+          Your active role is <strong style={{ color: 'var(--text-primary)' }}>{currentUser.role.toUpperCase()}</strong>. 
+          Standard client accounts are restricted to catalog viewing and shopping cart checkout. 
+          Only accounts with the <strong style={{ color: 'var(--accent-rose)' }}>ADMIN</strong> role can add, modify, or delete warehouse inventory listings.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="admin-console-grid animate-fade-in">
@@ -261,7 +303,7 @@ export default function ProductForm({
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', backgroundColor: 'var(--bg-secondary)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border-color)', marginTop: 'auto' }}>
           <ShieldAlert size={14} style={{ color: 'var(--accent-amber)', flexShrink: 0 }} />
-          <span>Note: Changes apply instantly. Offline mode supports writing updates to local cache.</span>
+          <span>Note: Changes apply instantly. Connected securely with active role authorization.</span>
         </div>
 
       </div>

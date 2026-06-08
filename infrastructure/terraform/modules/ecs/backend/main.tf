@@ -79,6 +79,14 @@ resource "aws_ecs_task_definition" "backend" {
         {
           name  = "EMAIL_NOTIFICATION_TOPIC_ARN"
           value = var.email_notification_topic_arn
+        },
+        {
+          name  = "USERS_TABLE"
+          value = var.users_table
+        },
+        {
+          name  = "INVOICE_BUCKET"
+          value = var.invoice_bucket
         }
       ]
       logConfiguration = {

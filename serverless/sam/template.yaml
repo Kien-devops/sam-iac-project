@@ -60,6 +60,18 @@ Resources:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
 
+  UsersTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName: !Sub UsersTable-${Environment}
+      PrimaryKey:
+        Name: id
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+
   InvoicePDFBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
@@ -143,7 +155,7 @@ Resources:
                 aws:SourceArn: !Ref OrderCreatedTopic
 
   # =========================================================================
-  # SNS Topic for Email Notifications (tách riêng khỏi OrderCreatedTopic)
+  # SNS Topic for Email Notifications (separated from OrderCreatedTopic)
   # =========================================================================
 
   EmailNotificationTopic:
@@ -188,7 +200,7 @@ Resources:
         Variables:
           INVOICE_BUCKET: !Ref InvoicePDFBucket
       Policies:
-        - S3WritePolicy:
+        - S3CrudPolicy:
             BucketName: !Ref InvoicePDFBucket
       Events:
         SQSQueueEvent:
@@ -234,6 +246,11 @@ Outputs:
     Value: !Ref DailyReportsTable
     Export:
       Name: !Sub ${AWS::StackName}-DailyReportsTable
+  UsersTableName:
+    Value: !Ref UsersTable
+    Export:
+      Name: !Sub ${AWS::StackName}-UsersTable
+
   InvoiceBucketName:
     Value: !Ref InvoicePDFBucket
   OrderCreatedTopicArn:

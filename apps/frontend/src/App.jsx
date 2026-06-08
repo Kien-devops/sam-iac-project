@@ -9,6 +9,7 @@ import OrderHistory from './components/orders/OrderHistory';
 import InvoiceModal from './components/orders/InvoiceModal';
 import ProductForm from './components/admin/ProductForm';
 import ArchDevOps from './components/devops/ArchDevOps';
+import AuthModal from './components/layout/AuthModal';
 
 import { useProducts } from './hooks/useProducts';
 import { useCart } from './hooks/useCart';
@@ -21,6 +22,17 @@ function App() {
   const [viewingInvoice, setViewingInvoice] = useState(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+
+  // User Authentication State
+  const [currentUser, setCurrentUser] = useState(() => {
+    const token = localStorage.getItem('hybrid-token');
+    const username = localStorage.getItem('hybrid-username');
+    const email = localStorage.getItem('hybrid-email');
+    const role = localStorage.getItem('hybrid-role');
+    const status = localStorage.getItem('hybrid-status');
+    return token ? { token, username, email, role, status } : null;
+  });
 
   // Notifications State
   const [notification, setNotification] = useState(null);
@@ -93,17 +105,39 @@ function App() {
 
   const {
     orders,
+    purchasedItems,
     loading: loadingOrders,
+    loadingPurchased,
     loadingOrder,
-    loadingVerify,
     customerEmail,
     setCustomerEmail,
     verificationStatus,
-    verifyEmail,
-    confirmVerificationSimulated,
+    setVerificationStatus,
     placeOrder,
-    refreshOrders
+    payOrder,
+    downloadInvoice,
+    refreshOrders,
+    refreshPurchasedItems
   } = useOrders(backendStatus, addNotification);
+
+  // Sync user verification email with useOrders email status when user logs in/out
+  useEffect(() => {
+    if (currentUser) {
+      setCustomerEmail(currentUser.email);
+      setVerificationStatus('verified');
+    } else {
+      setCustomerEmail('');
+      setVerificationStatus('unverified');
+    }
+    refreshOrders();
+  }, [currentUser]);
+
+  const handleLogout = () => {
+    apiService.logout();
+    setCurrentUser(null);
+    addNotification('success', 'Logged out successfully.');
+    setActiveTab('products');
+  };
 
   return (
     <div className="platform-container">
@@ -128,6 +162,9 @@ function App() {
         cartCount={getCount()}
         cartSubtotal={getSubtotal()}
         onOpenCart={() => setIsCartOpen(true)}
+        currentUser={currentUser}
+        onOpenAuth={() => setIsAuthOpen(true)}
+        onLogout={handleLogout}
       />
 
       {/* Main Sections */}
@@ -154,9 +191,16 @@ function App() {
         {activeTab === 'orders' && (
           <OrderHistory
             orders={orders}
+            purchasedItems={purchasedItems}
             loading={loadingOrders}
-            onRefresh={refreshOrders}
+            loadingPurchased={loadingPurchased}
+            onRefresh={() => {
+              refreshOrders();
+              refreshPurchasedItems();
+            }}
             onViewInvoice={setViewingInvoice}
+            onPayOrder={payOrder}
+            onDownloadInvoice={downloadInvoice}
           />
         )}
 
@@ -168,6 +212,8 @@ function App() {
             onUpdateProduct={updateProduct}
             onDeleteProduct={deleteProduct}
             loadingWrite={loadingWrite}
+            currentUser={currentUser}
+            onOpenAuth={() => setIsAuthOpen(true)}
           />
         )}
 
@@ -180,6 +226,18 @@ function App() {
 
       {/* Sidebar Drawers & Modal Dialogs */}
       
+      {/* Authentication Modal */}
+      {isAuthOpen && (
+        <AuthModal
+          isOpen={isAuthOpen}
+          onClose={() => setIsAuthOpen(false)}
+          onAuthSuccess={(userData) => {
+            setCurrentUser(userData);
+          }}
+          notify={addNotification}
+        />
+      )}
+
       {/* Detail Specifications Slide-over */}
       {selectedProductDetail && (
         <ProductDetailModal
@@ -204,11 +262,8 @@ function App() {
           getTax={getTax}
           getShipping={getShipping}
           getTotal={getTotal}
-          customerEmail={customerEmail}
-          setCustomerEmail={setCustomerEmail}
-          verificationStatus={verificationStatus}
-          onVerifyEmail={verifyEmail}
-          onConfirmVerificationSimulated={confirmVerificationSimulated}
+          currentUser={currentUser}
+          onOpenAuth={() => setIsAuthOpen(true)}
           onProceedToCheckout={() => {
             setIsCartOpen(false);
             setIsCheckoutOpen(true);
@@ -222,7 +277,7 @@ function App() {
         <CheckoutWizard
           cart={cart}
           total={getTotal()}
-          customerEmail={customerEmail}
+          customerEmail={currentUser ? currentUser.email : ''}
           onClose={() => setIsCheckoutOpen(false)}
           onSubmitOrder={async (shippingInfo) => {
             const completedOrder = await placeOrder(cart, getTotal(), shippingInfo);
