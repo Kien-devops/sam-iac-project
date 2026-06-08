@@ -1,7 +1,7 @@
 const { dynamoDocClient, useLocalMock } = require('../config/aws');
 const { PutCommand, ScanCommand, GetCommand } = require('@aws-sdk/lib-dynamodb');
 
-const tableName = process.env.DYNAMODB_ORDERS_TABLE || 'OrdersTable-prod';
+const tableName = process.env.ORDERS_TABLE || process.env.DYNAMODB_ORDERS_TABLE || 'OrdersTable-prod';
 
 // Local mock data store
 let mockOrders = [
