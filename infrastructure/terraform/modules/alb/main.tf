@@ -52,6 +52,10 @@ resource "aws_lb_target_group" "frontend" {
     matcher             = "200"
   }
 
+  lifecycle {
+    create_before_destroy = true
+  }
+
   tags = {
     Name        = "${var.environment}-tg-frontend"
     Environment = var.environment
