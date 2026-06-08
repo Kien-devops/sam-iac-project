@@ -37,7 +37,7 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb_target_group" "frontend" {
-  name        = "${var.environment}-tg-frontend"
+  name        = "${var.environment}-tg-fe-8080"
   port        = 8080
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
