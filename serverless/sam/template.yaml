@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
   hybrid-devops-ecommerce-aws serverless stack
-  Deploys SNS, SQS, DynamoDB, S3, and Lambda handlers for invoicing, emails, and reporting.
+  Orchestrates granular nested stacks for Database, Storage, Messaging, API Gateway, and Compute.
 
 Parameters:
   Environment:
@@ -11,463 +11,212 @@ Parameters:
     AllowedValues: [dev, staging, prod]
     Description: Environment stage (dev, staging, prod)
 
-Globals:
-  Function:
-    Timeout: 30
-    MemorySize: 128
-    Runtime: nodejs20.x
-    Architectures:
-      - x86_64
-    Environment:
-      Variables:
-        ENV: !Ref Environment
-        LOG_LEVEL: INFO
-
 Resources:
   # =========================================================================
-  # Databases & Storage
-  # =========================================================================
-  ProductsTable:
-    Type: AWS::Serverless::SimpleTable
-    Properties:
-      TableName: !Sub ProductsTable-${Environment}
-      PrimaryKey:
-        Name: id
-        Type: String
-      ProvisionedThroughput:
-        ReadCapacityUnits: 5
-        WriteCapacityUnits: 5
-
-  OrdersTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: !Sub OrdersTable-${Environment}
-      AttributeDefinitions:
-        - AttributeName: id
-          AttributeType: S
-      KeySchema:
-        - AttributeName: id
-          KeyType: HASH
-      ProvisionedThroughput:
-        ReadCapacityUnits: 5
-        WriteCapacityUnits: 5
-      StreamSpecification:
-        StreamViewType: NEW_AND_OLD_IMAGES
-
-  DailyReportsTable:
-    Type: AWS::Serverless::SimpleTable
-    Properties:
-      TableName: !Sub DailyReportsTable-${Environment}
-      PrimaryKey:
-        Name: date
-        Type: String
-      ProvisionedThroughput:
-        ReadCapacityUnits: 5
-        WriteCapacityUnits: 5
-
-  UsersTable:
-    Type: AWS::Serverless::SimpleTable
-    Properties:
-      TableName: !Sub UsersTable-${Environment}
-      PrimaryKey:
-        Name: id
-        Type: String
-      ProvisionedThroughput:
-        ReadCapacityUnits: 5
-        WriteCapacityUnits: 5
-
-
-  InvoicePDFBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      # BucketName intentionally omitted - CloudFormation auto-generates a unique name
-      # to prevent 409 conflicts when re-deploying after rollback
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-
-  # =========================================================================
-  # Messaging Layer (SNS & SQS)
-  # =========================================================================
-  OrderCreatedTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: !Sub OrderCreatedTopic-${Environment}
-
-  OrderCreatedQueue:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: !Sub OrderCreatedQueue-${Environment}
-      VisibilityTimeout: 90 # VisTimeout should be at least 3x function timeout
-
-  SNSToSQSSubscription:
-    Type: AWS::SNS::Subscription
-    Properties:
-      TopicArn: !Ref OrderCreatedTopic
-      Endpoint: !GetAtt OrderCreatedQueue.Arn
-      Protocol: sqs
-
-  # Policy to allow SNS to write to SQS Queue
-  SQSQueuePolicy:
-    Type: AWS::SQS::QueuePolicy
-    Properties:
-      Queues:
-        - !Ref OrderCreatedQueue
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: sns.amazonaws.com
-            Action: sqs:SendMessage
-            Resource: !GetAtt OrderCreatedQueue.Arn
-            Condition:
-              ArnEquals:
-                aws:SourceArn: !Ref OrderCreatedTopic
-
-  SendEmailQueue:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: !Sub SendEmailQueue-${Environment}
-      VisibilityTimeout: 90
-
-  SNSToSendEmailQueueSubscription:
-    Type: AWS::SNS::Subscription
-    Properties:
-      TopicArn: !Ref OrderCreatedTopic
-      Endpoint: !GetAtt SendEmailQueue.Arn
-      Protocol: sqs
-
-  SendEmailQueuePolicy:
-    Type: AWS::SQS::QueuePolicy
-    Properties:
-      Queues:
-        - !Ref SendEmailQueue
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: sns.amazonaws.com
-            Action: sqs:SendMessage
-            Resource: !GetAtt SendEmailQueue.Arn
-            Condition:
-              ArnEquals:
-                aws:SourceArn: !Ref OrderCreatedTopic
-
-  # =========================================================================
-  # SNS Topic for Email Notifications (separated from OrderCreatedTopic)
+  # DynamoDB Stacks
   # =========================================================================
 
-  EmailNotificationTopic:
-    Type: AWS::SNS::Topic
+  ProductsTableStack:
+    Type: AWS::Serverless::Application
     Properties:
-      TopicName: !Sub EmailNotificationTopic-${Environment}
+      Location: ./infrastructure/dynamodb/products-table.yaml
+      Parameters:
+        Environment: !Ref Environment
+
+  OrdersTableStack:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./infrastructure/dynamodb/orders-table.yaml
+      Parameters:
+        Environment: !Ref Environment
+
+  UsersTableStack:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./infrastructure/dynamodb/users-table.yaml
+      Parameters:
+        Environment: !Ref Environment
+
+  DailyReportsTableStack:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./infrastructure/dynamodb/daily-reports-table.yaml
+      Parameters:
+        Environment: !Ref Environment
+
+  WebSocketConnectionsTableStack:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./infrastructure/dynamodb/websocket-connections-table.yaml
+      Parameters:
+        Environment: !Ref Environment
 
   # =========================================================================
-  # Lambda Compute Handlers
+  # S3 Storage Stacks
   # =========================================================================
 
-  SendEmailConfirmationFunction:
-    Type: AWS::Serverless::Function
+  InvoiceBucketStack:
+    Type: AWS::Serverless::Application
     Properties:
-      Handler: app.lambdaHandler
-      CodeUri: src/send-email/
-      Description: Read from SQS, build invoice, publish to EmailNotificationTopic for delivery.
-      Environment:
-        Variables:
-          EMAIL_TOPIC_ARN: !Ref EmailNotificationTopic
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - sns:Publish
-                - sns:ListSubscriptionsByTopic
-                - sns:GetSubscriptionAttributes
-                - sns:SetSubscriptionAttributes
-              Resource: !Ref EmailNotificationTopic
-      Events:
-        SQSQueueEvent:
-          Type: SQS
-          Properties:
-            Queue: !GetAtt SendEmailQueue.Arn
-            BatchSize: 10
+      Location: ./infrastructure/s3/invoice-bucket.yaml
+      Parameters:
+        Environment: !Ref Environment
 
-  GenerateInvoiceFunction:
-    Type: AWS::Serverless::Function
+  ProductImagesBucketStack:
+    Type: AWS::Serverless::Application
     Properties:
-      Handler: app.lambdaHandler
-      CodeUri: src/generate-invoice/
-      Description: Generate invoice PDF text and upload to S3 Bucket.
-      Environment:
-        Variables:
-          INVOICE_BUCKET: !Ref InvoicePDFBucket
-          ORDERS_TABLE: !Ref OrdersTable
-      Policies:
-        - S3CrudPolicy:
-            BucketName: !Ref InvoicePDFBucket
-        - DynamoDBCrudPolicy:
-            TableName: !Ref OrdersTable
-      Events:
-        SQSQueueEvent:
-          Type: SQS
-          Properties:
-            Queue: !GetAtt OrderCreatedQueue.Arn
-            BatchSize: 10
+      Location: ./infrastructure/s3/product-images-bucket.yaml
+      Parameters:
+        Environment: !Ref Environment
+        ImageAnalyzerFunctionArn: !GetAtt ImageAnalyzerFunctionStack.Outputs.ImageAnalyzerFunctionArn
 
-  DailyRevenueReportFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: app.lambdaHandler
-      CodeUri: src/daily-report/
-      Description: Daily scheduler to aggregate orders revenue.
-      Environment:
-        Variables:
-          ORDERS_TABLE: !Ref OrdersTable
-          REPORTS_TABLE: !Ref DailyReportsTable
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Sub OrdersTable-${Environment}
-        - DynamoDBCrudPolicy:
-            TableName: !Sub DailyReportsTable-${Environment}
-      Events:
-        DailyCronTrigger:
-          Type: Schedule
-          Properties:
-            Schedule: cron(0 23 * * ? *) # Runs at 23:00 UTC daily
-            Name: DailyReportCron
-            Description: Trigger daily revenue aggregation
-            Enabled: True
+  # =========================================================================
+  # SQS Queues Stacks
+  # =========================================================================
 
-  ProductImagesBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
+  OrderCreatedQueueStack:
+    Type: AWS::Serverless::Application
     Properties:
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
+      Location: ./infrastructure/sqs/order-created-queue.yaml
+      Parameters:
+        Environment: !Ref Environment
 
-  ImageAnalyzerFunction:
-    Type: AWS::Serverless::Function
+  SendEmailQueueStack:
+    Type: AWS::Serverless::Application
     Properties:
-      Handler: app.lambdaHandler
-      CodeUri: src/image-analyzer/
-      Description: Read from S3, analyze product images using Rekognition, and update ProductsTable tags.
-      Environment:
-        Variables:
-          PRODUCTS_TABLE: !Ref ProductsTable
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref ProductsTable
-        - Statement:
-            - Effect: Allow
-              Action:
-                - rekognition:DetectLabels
-                - rekognition:DetectModerationLabels
-              Resource: "*"
-            - Effect: Allow
-              Action:
-                - s3:GetObject
-              Resource: !Sub arn:aws:s3:::*
-      Events:
-        S3UploadEvent:
-          Type: S3
-          Properties:
-            Bucket: !Ref ProductImagesBucket
-            Events: s3:ObjectCreated:*
+      Location: ./infrastructure/sqs/send-email-queue.yaml
+      Parameters:
+        Environment: !Ref Environment
 
-  AIAssistantFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: app.lambdaHandler
-      CodeUri: src/ai-assistant/
-      Description: Conversational e-commerce assistant using Bedrock.
-      Environment:
-        Variables:
-          PRODUCTS_TABLE: !Ref ProductsTable
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref ProductsTable
-        - Statement:
-            - Effect: Allow
-              Action:
-                - bedrock:InvokeModel
-              Resource: "*"
+  # =========================================================================
+  # SNS Topics Stacks
+  # =========================================================================
 
-  WebSocketConnectionsTable:
-    Type: AWS::DynamoDB::Table
+  OrderCreatedTopicStack:
+    Type: AWS::Serverless::Application
     Properties:
-      TableName: !Sub WebSocketConnections-${Environment}
-      AttributeDefinitions:
-        - AttributeName: connectionId
-          AttributeType: S
-        - AttributeName: email
-          AttributeType: S
-      KeySchema:
-        - AttributeName: connectionId
-          KeyType: HASH
-      GlobalSecondaryIndexes:
-        - IndexName: EmailIndex
-          KeySchema:
-            - AttributeName: email
-              KeyType: HASH
-          Projection:
-            ProjectionType: ALL
-          ProvisionedThroughput:
-            ReadCapacityUnits: 5
-            WriteCapacityUnits: 5
-      ProvisionedThroughput:
-        ReadCapacityUnits: 5
-        WriteCapacityUnits: 5
-      TimeToLiveSpecification:
-        AttributeName: ttl
-        Enabled: true
+      Location: ./infrastructure/sns/order-created-topic.yaml
+      Parameters:
+        Environment: !Ref Environment
+        OrderCreatedQueueArn: !GetAtt OrderCreatedQueueStack.Outputs.OrderCreatedQueueArn
+        SendEmailQueueArn: !GetAtt SendEmailQueueStack.Outputs.SendEmailQueueArn
 
-  WebSocketApi:
-    Type: AWS::ApiGatewayV2::Api
+  EmailNotificationTopicStack:
+    Type: AWS::Serverless::Application
     Properties:
-      Name: !Sub ECommerceWebSocket-${Environment}
-      ProtocolType: WEBSOCKET
-      RouteSelectionExpression: "$request.body.action"
+      Location: ./infrastructure/sns/email-notification-topic.yaml
+      Parameters:
+        Environment: !Ref Environment
 
-  ConnectRoute:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref WebSocketApi
-      RouteKey: $connect
-      AuthorizationType: NONE
-      Target: !Join
-        - '/'
-        - - 'integrations'
-          - !Ref ConnectIntegration
+  # =========================================================================
+  # API Gateway Stacks
+  # =========================================================================
 
-  ConnectIntegration:
-    Type: AWS::ApiGatewayV2::Integration
+  WebSocketApiStack:
+    Type: AWS::Serverless::Application
     Properties:
-      ApiId: !Ref WebSocketApi
-      Description: Connect Integration
-      IntegrationType: AWS_PROXY
-      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebSocketHandlerFunction.Arn}/invocations
+      Location: ./infrastructure/apigateway/websocket-api.yaml
+      Parameters:
+        Environment: !Ref Environment
+        WebSocketHandlerFunctionArn: !GetAtt WebSocketHandlerFunctionStack.Outputs.WebSocketHandlerFunctionArn
 
-  DisconnectRoute:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref WebSocketApi
-      RouteKey: $disconnect
-      Target: !Join
-        - '/'
-        - - 'integrations'
-          - !Ref DisconnectIntegration
+  # =========================================================================
+  # Lambda Function Stacks
+  # =========================================================================
 
-  DisconnectIntegration:
-    Type: AWS::ApiGatewayV2::Integration
+  AIAssistantFunctionStack:
+    Type: AWS::Serverless::Application
     Properties:
-      ApiId: !Ref WebSocketApi
-      Description: Disconnect Integration
-      IntegrationType: AWS_PROXY
-      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebSocketHandlerFunction.Arn}/invocations
+      Location: ./infrastructure/lambdas/ai-assistant.yaml
+      Parameters:
+        Environment: !Ref Environment
+        ProductsTable: !GetAtt ProductsTableStack.Outputs.ProductsTable
 
-  WebSocketDeployment:
-    Type: AWS::ApiGatewayV2::Deployment
-    DependsOn:
-      - ConnectRoute
-      - DisconnectRoute
+  ImageAnalyzerFunctionStack:
+    Type: AWS::Serverless::Application
     Properties:
-      ApiId: !Ref WebSocketApi
+      Location: ./infrastructure/lambdas/image-analyzer.yaml
+      Parameters:
+        Environment: !Ref Environment
+        ProductsTable: !GetAtt ProductsTableStack.Outputs.ProductsTable
 
-  WebSocketStage:
-    Type: AWS::ApiGatewayV2::Stage
+  SendEmailFunctionStack:
+    Type: AWS::Serverless::Application
     Properties:
-      ApiId: !Ref WebSocketApi
-      DeploymentId: !Ref WebSocketDeployment
-      StageName: !Ref Environment
+      Location: ./infrastructure/lambdas/send-email.yaml
+      Parameters:
+        Environment: !Ref Environment
+        SendEmailQueueArn: !GetAtt SendEmailQueueStack.Outputs.SendEmailQueueArn
+        EmailNotificationTopicArn: !GetAtt EmailNotificationTopicStack.Outputs.EmailNotificationTopicArn
 
-  WebSocketHandlerPermission:
-    Type: AWS::Lambda::Permission
+  GenerateInvoiceFunctionStack:
+    Type: AWS::Serverless::Application
     Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !Ref WebSocketHandlerFunction
-      Principal: apigateway.amazonaws.com
+      Location: ./infrastructure/lambdas/generate-invoice.yaml
+      Parameters:
+        Environment: !Ref Environment
+        InvoicePDFBucket: !GetAtt InvoiceBucketStack.Outputs.InvoicePDFBucket
+        OrdersTable: !GetAtt OrdersTableStack.Outputs.OrdersTable
+        OrderCreatedQueueArn: !GetAtt OrderCreatedQueueStack.Outputs.OrderCreatedQueueArn
 
-  WebSocketHandlerFunction:
-    Type: AWS::Serverless::Function
+  DailyRevenueReportFunctionStack:
+    Type: AWS::Serverless::Application
     Properties:
-      Handler: app.lambdaHandler
-      CodeUri: src/websocket-handler/
-      Description: Handles connect and disconnect requests for the WebSocket API.
-      Environment:
-        Variables:
-          CONNECTIONS_TABLE: !Ref WebSocketConnectionsTable
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref WebSocketConnectionsTable
+      Location: ./infrastructure/lambdas/daily-revenue-report.yaml
+      Parameters:
+        Environment: !Ref Environment
+        OrdersTable: !GetAtt OrdersTableStack.Outputs.OrdersTable
+        DailyReportsTable: !GetAtt DailyReportsTableStack.Outputs.DailyReportsTable
 
-  OrderStreamHandlerFunction:
-    Type: AWS::Serverless::Function
+  WebSocketHandlerFunctionStack:
+    Type: AWS::Serverless::Application
     Properties:
-      Handler: app.lambdaHandler
-      CodeUri: src/stream-handler/
-      Description: Processes DynamoDB Stream events from OrdersTable and broadcasts them via APIGW WebSocket API.
-      Environment:
-        Variables:
-          CONNECTIONS_TABLE: !Ref WebSocketConnectionsTable
-          WEBSOCKET_ENDPOINT: !Sub ${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref WebSocketConnectionsTable
-        - Statement:
-            - Effect: Allow
-              Action:
-                - execute-api:ManageConnections
-              Resource:
-                - !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/${Environment}/*
-      Events:
-        DynamoDBStreamEvent:
-          Type: DynamoDB
-          Properties:
-            Stream: !GetAtt OrdersTable.StreamArn
-            StartingPosition: LATEST
-            BatchSize: 10
+      Location: ./infrastructure/lambdas/websocket-handler.yaml
+      Parameters:
+        Environment: !Ref Environment
+        WebSocketConnectionsTable: !GetAtt WebSocketConnectionsTableStack.Outputs.WebSocketConnectionsTable
+
+  OrderStreamHandlerFunctionStack:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./infrastructure/lambdas/order-stream-handler.yaml
+      Parameters:
+        Environment: !Ref Environment
+        WebSocketConnectionsTable: !GetAtt WebSocketConnectionsTableStack.Outputs.WebSocketConnectionsTable
+        WebSocketApiId: !GetAtt WebSocketApiStack.Outputs.WebSocketApiId
+        OrdersTableStreamArn: !GetAtt OrdersTableStack.Outputs.OrdersTableStreamArn
 
 Outputs:
   ProductsTableName:
-    Value: !Ref ProductsTable
+    Value: !GetAtt ProductsTableStack.Outputs.ProductsTable
     Export:
       Name: !Sub ${AWS::StackName}-ProductsTable
   OrdersTableName:
-    Value: !Ref OrdersTable
+    Value: !GetAtt OrdersTableStack.Outputs.OrdersTable
     Export:
       Name: !Sub ${AWS::StackName}-OrdersTable
   DailyReportsTableName:
-    Value: !Ref DailyReportsTable
+    Value: !GetAtt DailyReportsTableStack.Outputs.DailyReportsTable
     Export:
       Name: !Sub ${AWS::StackName}-DailyReportsTable
   UsersTableName:
-    Value: !Ref UsersTable
+    Value: !GetAtt UsersTableStack.Outputs.UsersTable
     Export:
       Name: !Sub ${AWS::StackName}-UsersTable
 
   InvoiceBucketName:
-    Value: !Ref InvoicePDFBucket
+    Value: !GetAtt InvoiceBucketStack.Outputs.InvoicePDFBucket
   ProductImagesBucketName:
-    Value: !Ref ProductImagesBucket
+    Value: !GetAtt ProductImagesBucketStack.Outputs.ProductImagesBucket
   OrderCreatedTopicArn:
-    Value: !Ref OrderCreatedTopic
+    Value: !GetAtt OrderCreatedTopicStack.Outputs.OrderCreatedTopicArn
     Export:
       Name: !Sub ${AWS::StackName}-OrderCreatedTopicArn
   EmailNotificationTopicArn:
-    Value: !Ref EmailNotificationTopic
+    Value: !GetAtt EmailNotificationTopicStack.Outputs.EmailNotificationTopicArn
     Export:
       Name: !Sub ${AWS::StackName}-EmailNotificationTopicArn
   WebSocketApiUrl:
-    Value: !Sub wss://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/
+    Value: !GetAtt WebSocketApiStack.Outputs.WebSocketApiUrl
     Export:
       Name: !Sub ${AWS::StackName}-WebSocketApiUrl

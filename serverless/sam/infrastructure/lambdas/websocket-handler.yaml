@@ -1,0 +1,29 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: WebSocket Handler Lambda Stack
+
+Parameters:
+  Environment:
+    Type: String
+  WebSocketConnectionsTable:
+    Type: String
+
+Resources:
+  WebSocketHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambdaHandler
+      CodeUri: ../../src/websocket-handler/
+      Description: Handles connect and disconnect requests for the WebSocket API.
+      Environment:
+        Variables:
+          CONNECTIONS_TABLE: !Ref WebSocketConnectionsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref WebSocketConnectionsTable
+
+Outputs:
+  WebSocketHandlerFunctionArn:
+    Value: !GetAtt WebSocketHandlerFunction.Arn
+  WebSocketHandlerFunctionRoleArn:
+    Value: !GetAtt WebSocketHandlerFunction.Role

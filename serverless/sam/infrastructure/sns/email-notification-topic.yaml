@@ -1,0 +1,18 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: SNS EmailNotificationTopic Stack
+
+Parameters:
+  Environment:
+    Type: String
+
+Resources:
+  EmailNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub EmailNotificationTopic-${Environment}
+
+Outputs:
+  EmailNotificationTopic:
+    Value: !Ref EmailNotificationTopic
+  EmailNotificationTopicArn:
+    Value: !Ref EmailNotificationTopic

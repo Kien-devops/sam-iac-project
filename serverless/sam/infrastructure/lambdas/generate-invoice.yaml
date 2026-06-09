@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Generate Invoice Lambda Stack
+
+Parameters:
+  Environment:
+    Type: String
+  InvoicePDFBucket:
+    Type: String
+  OrdersTable:
+    Type: String
+  OrderCreatedQueueArn:
+    Type: String
+
+Resources:
+  GenerateInvoiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambdaHandler
+      CodeUri: ../../src/generate-invoice/
+      Description: Generate invoice PDF text and upload to S3 Bucket.
+      Environment:
+        Variables:
+          INVOICE_BUCKET: !Ref InvoicePDFBucket
+          ORDERS_TABLE: !Ref OrdersTable
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref InvoicePDFBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref OrdersTable
+      Events:
+        SQSQueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !Ref OrderCreatedQueueArn
+            BatchSize: 10
+
+Outputs:
+  GenerateInvoiceFunctionArn:
+    Value: !GetAtt GenerateInvoiceFunction.Arn

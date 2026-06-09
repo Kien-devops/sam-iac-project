@@ -1,0 +1,23 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: DynamoDB UsersTable Stack
+
+Parameters:
+  Environment:
+    Type: String
+
+Resources:
+  UsersTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName: !Sub UsersTable-${Environment}
+      PrimaryKey:
+        Name: id
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+Outputs:
+  UsersTable:
+    Value: !Ref UsersTable

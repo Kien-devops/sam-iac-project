@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Daily Revenue Report Lambda Stack
+
+Parameters:
+  Environment:
+    Type: String
+  OrdersTable:
+    Type: String
+  DailyReportsTable:
+    Type: String
+
+Resources:
+  DailyRevenueReportFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambdaHandler
+      CodeUri: ../../src/daily-report/
+      Description: Daily scheduler to aggregate orders revenue.
+      Environment:
+        Variables:
+          ORDERS_TABLE: !Ref OrdersTable
+          REPORTS_TABLE: !Ref DailyReportsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref OrdersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DailyReportsTable
+      Events:
+        DailyCronTrigger:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 23 * * ? *) # Runs at 23:00 UTC daily
+            Name: DailyReportCron
+            Description: Trigger daily revenue aggregation
+            Enabled: True
+
+Outputs:
+  DailyRevenueReportFunctionArn:
+    Value: !GetAtt DailyRevenueReportFunction.Arn

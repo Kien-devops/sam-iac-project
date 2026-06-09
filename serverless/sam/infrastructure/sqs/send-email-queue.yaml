@@ -1,0 +1,36 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: SQS SendEmailQueue Stack
+
+Parameters:
+  Environment:
+    Type: String
+
+Resources:
+  SendEmailQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub SendEmailQueue-${Environment}
+      VisibilityTimeout: 90
+
+  SendEmailQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref SendEmailQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt SendEmailQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Sub arn:aws:sns:${AWS::Region}:${AWS::AccountId}:OrderCreatedTopic-${Environment}
+
+Outputs:
+  SendEmailQueue:
+    Value: !Ref SendEmailQueue
+  SendEmailQueueArn:
+    Value: !GetAtt SendEmailQueue.Arn

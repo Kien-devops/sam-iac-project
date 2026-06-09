@@ -1,0 +1,45 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Order Stream Handler Lambda Stack
+
+Parameters:
+  Environment:
+    Type: String
+  WebSocketConnectionsTable:
+    Type: String
+  WebSocketApiId:
+    Type: String
+  OrdersTableStreamArn:
+    Type: String
+
+Resources:
+  OrderStreamHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambdaHandler
+      CodeUri: ../../src/stream-handler/
+      Description: Processes DynamoDB Stream events from OrdersTable and broadcasts them via APIGW WebSocket API.
+      Environment:
+        Variables:
+          CONNECTIONS_TABLE: !Ref WebSocketConnectionsTable
+          WEBSOCKET_ENDPOINT: !Sub ${WebSocketApiId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref WebSocketConnectionsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - execute-api:ManageConnections
+              Resource:
+                - !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApiId}/${Environment}/*
+      Events:
+        DynamoDBStreamEvent:
+          Type: DynamoDB
+          Properties:
+            Stream: !Ref OrdersTableStreamArn
+            StartingPosition: LATEST
+            BatchSize: 10
+
+Outputs:
+  OrderStreamHandlerFunctionArn:
+    Value: !GetAtt OrderStreamHandlerFunction.Arn

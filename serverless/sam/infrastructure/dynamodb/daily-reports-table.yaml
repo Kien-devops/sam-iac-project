@@ -1,0 +1,23 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: DynamoDB DailyReportsTable Stack
+
+Parameters:
+  Environment:
+    Type: String
+
+Resources:
+  DailyReportsTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName: !Sub DailyReportsTable-${Environment}
+      PrimaryKey:
+        Name: date
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+Outputs:
+  DailyReportsTable:
+    Value: !Ref DailyReportsTable

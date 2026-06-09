@@ -1,0 +1,23 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: DynamoDB ProductsTable Stack
+
+Parameters:
+  Environment:
+    Type: String
+
+Resources:
+  ProductsTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName: !Sub ProductsTable-${Environment}
+      PrimaryKey:
+        Name: id
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+Outputs:
+  ProductsTable:
+    Value: !Ref ProductsTable

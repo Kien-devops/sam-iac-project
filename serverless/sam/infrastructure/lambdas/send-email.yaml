@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Send Email Lambda Stack
+
+Parameters:
+  Environment:
+    Type: String
+  SendEmailQueueArn:
+    Type: String
+  EmailNotificationTopicArn:
+    Type: String
+
+Resources:
+  SendEmailConfirmationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambdaHandler
+      CodeUri: ../../src/send-email/
+      Description: Read from SQS, build invoice, publish to EmailNotificationTopic for delivery.
+      Environment:
+        Variables:
+          EMAIL_TOPIC_ARN: !Ref EmailNotificationTopicArn
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - sns:Publish
+                - sns:ListSubscriptionsByTopic
+                - sns:GetSubscriptionAttributes
+                - sns:SetSubscriptionAttributes
+              Resource: !Ref EmailNotificationTopicArn
+      Events:
+        SQSQueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !Ref SendEmailQueueArn
+            BatchSize: 10
+
+Outputs:
+  SendEmailConfirmationFunctionArn:
+    Value: !GetAtt SendEmailConfirmationFunction.Arn

@@ -1,0 +1,37 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Image Analyzer Lambda Stack
+
+Parameters:
+  Environment:
+    Type: String
+  ProductsTable:
+    Type: String
+
+Resources:
+  ImageAnalyzerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambdaHandler
+      CodeUri: ../../src/image-analyzer/
+      Description: Read from S3, analyze product images using Rekognition, and update ProductsTable tags.
+      Environment:
+        Variables:
+          PRODUCTS_TABLE: !Ref ProductsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProductsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rekognition:DetectLabels
+                - rekognition:DetectModerationLabels
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub arn:aws:s3:::*
+
+Outputs:
+  ImageAnalyzerFunctionArn:
+    Value: !GetAtt ImageAnalyzerFunction.Arn

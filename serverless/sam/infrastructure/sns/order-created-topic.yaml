@@ -1,0 +1,36 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: SNS OrderCreatedTopic Stack
+
+Parameters:
+  Environment:
+    Type: String
+  OrderCreatedQueueArn:
+    Type: String
+  SendEmailQueueArn:
+    Type: String
+
+Resources:
+  OrderCreatedTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub OrderCreatedTopic-${Environment}
+
+  SNSToSQSSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref OrderCreatedTopic
+      Endpoint: !Ref OrderCreatedQueueArn
+      Protocol: sqs
+
+  SNSToSendEmailQueueSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref OrderCreatedTopic
+      Endpoint: !Ref SendEmailQueueArn
+      Protocol: sqs
+
+Outputs:
+  OrderCreatedTopic:
+    Value: !Ref OrderCreatedTopic
+  OrderCreatedTopicArn:
+    Value: !Ref OrderCreatedTopic

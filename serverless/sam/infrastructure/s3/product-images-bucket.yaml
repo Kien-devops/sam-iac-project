@@ -1,0 +1,33 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: S3 Product Images Bucket Stack with Notification Trigger
+
+Parameters:
+  Environment:
+    Type: String
+  ImageAnalyzerFunctionArn:
+    Type: String
+
+Resources:
+  ProductImagesBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !Ref ImageAnalyzerFunctionArn
+
+  ImageAnalyzerLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ImageAnalyzerFunctionArn
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !GetAtt ProductImagesBucket.Arn
+
+Outputs:
+  ProductImagesBucket:
+    Value: !Ref ProductImagesBucket
+  ProductImagesBucketArn:
+    Value: !GetAtt ProductImagesBucket.Arn
