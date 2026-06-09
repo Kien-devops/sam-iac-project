@@ -24,7 +24,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: app.lambdaHandler
-      CodeUri: ../../src/order-stream/
+      CodeUri: ../../src/stream-handler/
       Description: Processes DynamoDB Streams for Orders Table to push events over WebSocket connections.
       Environment:
         Variables:
