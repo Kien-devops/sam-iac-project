@@ -1,7 +1,13 @@
 const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
 
 const s3Client = new S3Client({});
+const dbClient = new DynamoDBClient({});
+const docClient = DynamoDBDocumentClient.from(dbClient);
+
 const invoiceBucketName = process.env.INVOICE_BUCKET;
+const ordersTable = process.env.ORDERS_TABLE;
 
 /**
  * Lambda handler for generating an invoice and updating the user's purchased items list.
@@ -100,6 +106,23 @@ Thank you for buying from our Cloud-Native platform!
       });
       await s3Client.send(putPurchasedCommand);
       console.log('[Lambda generate-invoice] Purchased list updated successfully.');
+
+      // 3. Update order status to 'Completed' in DynamoDB
+      if (ordersTable) {
+        console.log(`[Lambda generate-invoice] Updating order status to 'Completed' in DynamoDB for ${order.id}`);
+        try {
+          await docClient.send(new UpdateCommand({
+            TableName: ordersTable,
+            Key: { id: order.id },
+            UpdateExpression: 'SET #status = :status',
+            ExpressionAttributeNames: { '#status': 'status' },
+            ExpressionAttributeValues: { ':status': 'Completed' }
+          }));
+          console.log('[Lambda generate-invoice] DynamoDB order status updated to Completed.');
+        } catch (dbErr) {
+          console.error('[Lambda generate-invoice] Failed to update DynamoDB order status:', dbErr);
+        }
+      }
     }
 
     return {

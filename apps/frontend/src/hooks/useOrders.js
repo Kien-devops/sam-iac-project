@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { apiService } from '../services/api';
 
-export function useOrders(backendStatus, notify) {
+export function useOrders(backendStatus, notify, currentUser) {
   const [orders, setOrders] = useState([]);
   const [purchasedItems, setPurchasedItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -22,6 +22,84 @@ export function useOrders(backendStatus, notify) {
     localStorage.setItem('hybrid-customer-email', customerEmail);
     localStorage.setItem('hybrid-email-status', verificationStatus);
   }, [customerEmail, verificationStatus]);
+
+  // Real-time WebSocket connection to receive live order updates
+  useEffect(() => {
+    if (!currentUser || !currentUser.token) {
+      return;
+    }
+
+    const wsUrlEnv = import.meta.env.VITE_WEBSOCKET_URL;
+    let wsUrl = '';
+    if (wsUrlEnv) {
+      wsUrl = wsUrlEnv;
+    } else {
+      const base = import.meta.env.VITE_API_URL || '';
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      if (base.startsWith('http')) {
+        wsUrl = base.replace(/^http/, 'ws');
+      } else {
+        wsUrl = `${protocol}//${window.location.host}`;
+      }
+    }
+
+    const fullWsUrl = `${wsUrl}?token=${currentUser.token}`;
+    console.log(`[WebSocket] Connecting to: ${fullWsUrl}`);
+    
+    let socket;
+    try {
+      socket = new WebSocket(fullWsUrl);
+    } catch (e) {
+      console.error('[WebSocket] Connection attempt failed:', e);
+      return;
+    }
+
+    socket.onopen = () => {
+      console.log('[WebSocket] Connection established successfully.');
+    };
+
+    socket.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        console.log('[WebSocket] Received update:', message);
+
+        if (message.type === 'ORDER_UPDATE') {
+          const { orderId, status } = message;
+          if (notify) {
+            notify('success', `Pipeline Update: Order ${orderId} status changed to ${status}!`);
+          }
+
+          // Force local update in state
+          setOrders(prev => prev.map(o => {
+            if (o.id === orderId) {
+              return { ...o, status };
+            }
+            return o;
+          }));
+
+          // Refresh purchased list if order is completed
+          if (status === 'Completed') {
+            fetchPurchasedItems();
+          }
+        }
+      } catch (err) {
+        console.error('[WebSocket] Error processing socket message:', err);
+      }
+    };
+
+    socket.onclose = (e) => {
+      console.log('[WebSocket] Connection closed:', e.reason);
+    };
+
+    socket.onerror = (err) => {
+      console.error('[WebSocket] Error occurred on connection:', err);
+    };
+
+    return () => {
+      console.log('[WebSocket] Cleaning up connection');
+      socket.close();
+    };
+  }, [currentUser]);
 
   const fetchPurchasedItems = async () => {
     setLoadingPurchased(true);

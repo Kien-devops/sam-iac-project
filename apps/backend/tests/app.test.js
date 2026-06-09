@@ -75,4 +75,24 @@ describe('E-Commerce Express App API Endpoints', () => {
       expect(res.statusCode).toEqual(400);
     });
   });
+
+  describe('POST /api/ai/chat', () => {
+    it('should return 200 OK and matching products with a reply', async () => {
+      const res = await request(app)
+        .post('/api/ai/chat')
+        .send({ message: 'macbook' });
+      expect(res.statusCode).toEqual(200);
+      expect(res.body).toHaveProperty('reply');
+      expect(res.body).toHaveProperty('products');
+      expect(Array.isArray(res.body.products)).toBe(true);
+      expect(res.body.products.length).toBeGreaterThan(0);
+    });
+
+    it('should reject requests with empty body or missing message', async () => {
+      const res = await request(app)
+        .post('/api/ai/chat')
+        .send({});
+      expect(res.statusCode).toEqual(400);
+    });
+  });
 });

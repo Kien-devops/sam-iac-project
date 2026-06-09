@@ -9,6 +9,7 @@ import OrderHistory from './components/orders/OrderHistory';
 import InvoiceModal from './components/orders/InvoiceModal';
 import ProductForm from './components/admin/ProductForm';
 import AuthModal from './components/layout/AuthModal';
+import AIChatbot from './components/ai/AIChatbot';
 
 import { useProducts } from './hooks/useProducts';
 import { useCart } from './hooks/useCart';
@@ -75,9 +76,7 @@ function App() {
     try {
       const isOnline = await apiService.checkHealth();
       setBackendStatus(isOnline ? 'online' : 'offline');
-      if (isOnline) {
-        addNotification('success', 'Connected to server.');
-      } else {
+      if (!isOnline) {
         addNotification('warning', 'Offline mode: using local database.');
       }
     } catch (e) {
@@ -136,7 +135,7 @@ function App() {
     downloadInvoice,
     refreshOrders,
     refreshPurchasedItems
-  } = useOrders(backendStatus, addNotification);
+  } = useOrders(backendStatus, addNotification, currentUser);
 
   // Sync user verification email with useOrders email status when user logs in/out
   useEffect(() => {
@@ -316,6 +315,8 @@ function App() {
         />
       )}
 
+      {/* AI Smart Assistant Chatbot */}
+      <AIChatbot onSelectProduct={setSelectedProductDetail} />
 
     </div>
   );

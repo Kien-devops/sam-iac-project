@@ -68,6 +68,24 @@ export default function ProductDetailModal({ product, onClose, onAddToCart }) {
 
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>{description || 'No additional specifications provided.'}</p>
 
+          {product.tags && product.tags.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {product.tags.map((tag, idx) => (
+                <span key={idx} style={{ 
+                  fontSize: '0.7rem', 
+                  background: 'rgba(79, 70, 229, 0.06)', 
+                  color: '#4f46e5', 
+                  padding: '2px 8px', 
+                  borderRadius: '4px', 
+                  border: '1px solid rgba(79, 70, 229, 0.12)',
+                  fontWeight: '500'
+                }}>
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
+
           {/* Specs Sheet */}
           <div style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '16px' }}>
             <h4 style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '12px', letterSpacing: '0.05em' }}>Technical Specifications</h4>

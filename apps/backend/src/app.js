@@ -21,6 +21,7 @@ app.use(express.json());
 const authRoutes = require('./routes/auth.routes');
 const productRoutes = require('./routes/product.routes');
 const orderRoutes = require('./routes/order.routes');
+const aiRoutes = require('./routes/ai.routes');
 
 // Logger middleware
 app.use((req, res, next) => {
@@ -41,6 +42,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Global Error Handler
 app.use((err, req, res, next) => {
@@ -50,10 +52,15 @@ app.use((err, req, res, next) => {
   });
 });
 
+const http = require('http');
+const { initLocalWebSocket } = require('./config/websocket');
+
 // Start Server if not imported by test suite
 if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`🚀 ECS Backend Server is running on port ${PORT}`);
+  const server = http.createServer(app);
+  initLocalWebSocket(server);
+  server.listen(PORT, () => {
+    console.log(`🚀 ECS Backend Server (with WebSocket Support) is running on port ${PORT}`);
   });
 }
 

@@ -62,6 +62,23 @@ export default function ProductCard({ product, onAddToCart, onViewDetails }) {
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: '1.4', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
               {description || 'Premium cloud-engineered product. Built for standard reliability.'}
             </p>
+            {product.tags && product.tags.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+                {product.tags.slice(0, 3).map((tag, idx) => (
+                  <span key={idx} style={{ 
+                    fontSize: '0.62rem', 
+                    background: 'rgba(79, 70, 229, 0.06)', 
+                    color: '#4f46e5', 
+                    padding: '1px 6px', 
+                    borderRadius: '4px', 
+                    border: '1px solid rgba(79, 70, 229, 0.12)',
+                    fontWeight: '500'
+                  }}>
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            )}
             {stock > 0 && (
               <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: 'auto' }} className="font-mono">
                 <Package size={12} />

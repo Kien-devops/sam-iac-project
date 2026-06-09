@@ -16,6 +16,16 @@ export default function OrderHistory({
   const [payingId, setPayingId] = useState(null);
   const [subTab, setSubTab] = useState('purchased'); // 'purchased', 'pending', 'events'
 
+  // Keep selected order details in sync with updated list (e.g. via WebSocket events)
+  React.useEffect(() => {
+    if (selectedOrderDetails) {
+      const updated = orders.find(o => o.id === selectedOrderDetails.id);
+      if (updated && JSON.stringify(updated) !== JSON.stringify(selectedOrderDetails)) {
+        setSelectedOrderDetails(updated);
+      }
+    }
+  }, [orders, selectedOrderDetails]);
+
   const getStatusBadgeColor = (status) => {
     const s = String(status || '').toLowerCase();
     if (s === 'completed' || s === 'success' || s === 'paid') {
@@ -41,13 +51,15 @@ export default function OrderHistory({
 
   // Determine stage completion status
   const getPipelineStages = (status) => {
-    const isCompleted = ['completed', 'success', 'paid'].includes(String(status || '').toLowerCase());
+    const s = String(status || '').toLowerCase();
+    const isPaid = ['paid', 'completed', 'success'].includes(s);
+    const isCompleted = ['completed', 'success'].includes(s);
     return [
       { name: 'ALB HTTP POST', label: 'API request validated', devText: 'Fargate Container routing', completed: true },
       { name: 'SNS Event Published', label: 'Order topic notification dispatched', devText: 'hybrid-order-events', completed: true },
       { name: 'SQS Buffer Queue', label: 'Message consumed from queue', devText: 'hybrid-invoice-queue', completed: true },
-      { name: 'Payment Confirmation', label: 'Credit Card / Balance paid', devText: 'POST /api/orders/:id/pay', completed: isCompleted },
-      { name: 'Lambda Processor', label: 'Invoice template compiled', devText: 'GenerateInvoicePDF', completed: isCompleted },
+      { name: 'Payment Confirmation', label: 'Credit Card / Balance paid', devText: 'POST /api/orders/:id/pay', completed: isPaid },
+      { name: 'Lambda Processor', label: 'Invoice template compiled', devText: 'GenerateInvoicePDF', completed: isPaid },
       { name: 'S3 Archival', label: 'Receipt invoice committed to bucket', devText: 'hybrid-invoice-bucket', completed: isCompleted }
     ];
   };

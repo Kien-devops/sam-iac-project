@@ -69,6 +69,36 @@ class OrderService {
       console.error('[OrderService] Warning: SNS event publish failed but order status was updated to Paid:', snsError);
     }
 
+    if (useLocalMock) {
+      const { sendToUser } = require('../config/websocket');
+      sendToUser(updatedOrder.email, {
+        type: 'ORDER_UPDATE',
+        orderId: updatedOrder.id,
+        status: 'Paid',
+        total: updatedOrder.total,
+        items: updatedOrder.items,
+        timestamp: new Date().toISOString()
+      });
+
+      // Simulate SQS Lambda background worker generating invoice and completing order
+      setTimeout(async () => {
+        try {
+          const completedOrder = await orderRepository.updateStatus(id, 'Completed');
+          console.log(`[Local Mock Stream] Order ${id} status updated to Completed (Invoice generated)`);
+          sendToUser(completedOrder.email, {
+            type: 'ORDER_UPDATE',
+            orderId: completedOrder.id,
+            status: 'Completed',
+            total: completedOrder.total,
+            items: completedOrder.items,
+            timestamp: new Date().toISOString()
+          });
+        } catch (simErr) {
+          console.error('[Local Mock Stream] Error simulating order completion:', simErr);
+        }
+      }, 2500);
+    }
+
     return updatedOrder;
   }
 

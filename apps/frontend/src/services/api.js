@@ -434,5 +434,53 @@ Thank you for buying from our Cloud-Native platform!
       const errMsg = error.response?.data?.error || 'SES sandbox dispatch error.';
       return { success: false, message: errMsg };
     }
+  },
+
+  /**
+   * Ask the AI Assistant for recommendations or queries.
+   */
+  async askAIChatbot(message) {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/ai/chat`, { message }, {
+        headers: getAuthHeaders()
+      });
+      return response.data;
+    } catch (error) {
+      // Mock Fallback
+      console.warn("Backend AI chat offline. Simulating response locally.");
+      const query = message.toLowerCase();
+      const products = JSON.parse(localStorage.getItem('hybrid-local-products') || '[]');
+      
+      const recommended = [];
+      for (const p of products) {
+        const matchName = p.name?.toLowerCase().includes(query) || query.includes(p.name?.toLowerCase());
+        const matchCategory = p.category?.toLowerCase().includes(query) || query.includes(p.category?.toLowerCase());
+        const matchDesc = p.description?.toLowerCase().includes(query);
+        const matchTags = Array.isArray(p.tags) && p.tags.some(t => query.includes(t.toLowerCase()) || t.toLowerCase().includes(query));
+
+        if (matchName || matchCategory || matchDesc || matchTags) {
+          recommended.push(p);
+        }
+      }
+
+      let reply = "";
+      if (query.includes('hello') || query.includes('hi ') || query.includes('xin chào')) {
+        reply = "Hello! I am your AI-powered E-Commerce Assistant. How can I help you find products or track orders today?";
+      } else if (recommended.length > 0) {
+        reply = `Based on your request, I found ${recommended.length} matching item(s) in our store. Check them out!`;
+      } else if (query.includes('order') || query.includes('track') || query.includes('đơn hàng')) {
+        reply = "You can view your order processing lifecycle live in the 'Account Dashboard' tab under 'Event Pipeline Log'. State updates are pushed in real time via AWS WebSockets!";
+      } else if (query.includes('ship') || query.includes('delivery')) {
+        reply = "We offer standard delivery. When you checkout, your items are registered, paid, and tax invoices are automatically generated and archived in S3.";
+      } else {
+        reply = "I'm not completely sure about that, but here are some popular items in our store that you might like!";
+        recommended.push(...products.slice(0, 2));
+      }
+
+      return {
+        reply,
+        products: recommended.slice(0, 3)
+      };
+    }
   }
 };

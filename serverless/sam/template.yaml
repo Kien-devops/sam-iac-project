@@ -39,15 +39,20 @@ Resources:
         WriteCapacityUnits: 5
 
   OrdersTable:
-    Type: AWS::Serverless::SimpleTable
+    Type: AWS::DynamoDB::Table
     Properties:
       TableName: !Sub OrdersTable-${Environment}
-      PrimaryKey:
-        Name: id
-        Type: String
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
       ProvisionedThroughput:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
 
   DailyReportsTable:
     Type: AWS::Serverless::SimpleTable
@@ -202,9 +207,12 @@ Resources:
       Environment:
         Variables:
           INVOICE_BUCKET: !Ref InvoicePDFBucket
+          ORDERS_TABLE: !Ref OrdersTable
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref InvoicePDFBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref OrdersTable
       Events:
         SQSQueueEvent:
           Type: SQS
@@ -236,6 +244,199 @@ Resources:
             Description: Trigger daily revenue aggregation
             Enabled: True
 
+  ProductImagesBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  ImageAnalyzerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambdaHandler
+      CodeUri: src/image-analyzer/
+      Description: Read from S3, analyze product images using Rekognition, and update ProductsTable tags.
+      Environment:
+        Variables:
+          PRODUCTS_TABLE: !Ref ProductsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProductsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rekognition:DetectLabels
+                - rekognition:DetectModerationLabels
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub arn:aws:s3:::*
+      Events:
+        S3UploadEvent:
+          Type: S3
+          Properties:
+            Bucket: !Ref ProductImagesBucket
+            Events: s3:ObjectCreated:*
+
+  AIAssistantFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambdaHandler
+      CodeUri: src/ai-assistant/
+      Description: Conversational e-commerce assistant using Bedrock.
+      Environment:
+        Variables:
+          PRODUCTS_TABLE: !Ref ProductsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProductsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: "*"
+
+  WebSocketConnectionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub WebSocketConnections-${Environment}
+      AttributeDefinitions:
+        - AttributeName: connectionId
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: connectionId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: EmailIndex
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  WebSocketApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub ECommerceWebSocket-${Environment}
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: "$request.body.action"
+
+  ConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketApi
+      RouteKey: $connect
+      AuthorizationType: NONE
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref ConnectIntegration
+
+  ConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketApi
+      Description: Connect Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebSocketHandlerFunction.Arn}/invocations
+
+  DisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketApi
+      RouteKey: $disconnect
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref DisconnectIntegration
+
+  DisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketApi
+      Description: Disconnect Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebSocketHandlerFunction.Arn}/invocations
+
+  WebSocketDeployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+      - ConnectRoute
+      - DisconnectRoute
+    Properties:
+      ApiId: !Ref WebSocketApi
+
+  WebSocketStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref WebSocketApi
+      DeploymentId: !Ref WebSocketDeployment
+      StageName: !Ref Environment
+
+  WebSocketHandlerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref WebSocketHandlerFunction
+      Principal: apigateway.amazonaws.com
+
+  WebSocketHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambdaHandler
+      CodeUri: src/websocket-handler/
+      Description: Handles connect and disconnect requests for the WebSocket API.
+      Environment:
+        Variables:
+          CONNECTIONS_TABLE: !Ref WebSocketConnectionsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref WebSocketConnectionsTable
+
+  OrderStreamHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambdaHandler
+      CodeUri: src/stream-handler/
+      Description: Processes DynamoDB Stream events from OrdersTable and broadcasts them via APIGW WebSocket API.
+      Environment:
+        Variables:
+          CONNECTIONS_TABLE: !Ref WebSocketConnectionsTable
+          WEBSOCKET_ENDPOINT: !Sub ${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref WebSocketConnectionsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - execute-api:ManageConnections
+              Resource:
+                - !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/${Environment}/*
+      Events:
+        DynamoDBStreamEvent:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt OrdersTable.StreamArn
+            StartingPosition: LATEST
+            BatchSize: 10
+
 Outputs:
   ProductsTableName:
     Value: !Ref ProductsTable
@@ -256,6 +457,8 @@ Outputs:
 
   InvoiceBucketName:
     Value: !Ref InvoicePDFBucket
+  ProductImagesBucketName:
+    Value: !Ref ProductImagesBucket
   OrderCreatedTopicArn:
     Value: !Ref OrderCreatedTopic
     Export:
@@ -264,3 +467,7 @@ Outputs:
     Value: !Ref EmailNotificationTopic
     Export:
       Name: !Sub ${AWS::StackName}-EmailNotificationTopicArn
+  WebSocketApiUrl:
+    Value: !Sub wss://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/
+    Export:
+      Name: !Sub ${AWS::StackName}-WebSocketApiUrl
