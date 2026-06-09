@@ -182,6 +182,9 @@ Resources:
             - Effect: Allow
               Action:
                 - sns:Publish
+                - sns:ListSubscriptionsByTopic
+                - sns:GetSubscriptionAttributes
+                - sns:SetSubscriptionAttributes
               Resource: !Ref EmailNotificationTopic
       Events:
         SQSQueueEvent:
