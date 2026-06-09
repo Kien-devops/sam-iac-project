@@ -39,6 +39,14 @@ Resources:
                 - s3:GetObject
               Resource: !Sub arn:aws:s3:::*
 
+  ImageAnalyzerLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ImageAnalyzerFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub arn:aws:s3:::product-images-bucket-${AWS::AccountId}-${Environment}
+
 Outputs:
   ImageAnalyzerFunctionArn:
     Value: !GetAtt ImageAnalyzerFunction.Arn

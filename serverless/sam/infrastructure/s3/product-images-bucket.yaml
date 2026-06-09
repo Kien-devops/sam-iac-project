@@ -13,18 +13,11 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
+      BucketName: !Sub product-images-bucket-${AWS::AccountId}-${Environment}
       NotificationConfiguration:
         LambdaConfigurations:
           - Event: s3:ObjectCreated:*
             Function: !Ref ImageAnalyzerFunctionArn
-
-  ImageAnalyzerLambdaPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref ImageAnalyzerFunctionArn
-      Action: lambda:InvokeFunction
-      Principal: s3.amazonaws.com
-      SourceArn: !GetAtt ProductImagesBucket.Arn
 
 Outputs:
   ProductImagesBucket:
