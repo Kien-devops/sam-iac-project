@@ -2,6 +2,13 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: WebSocket Handler Lambda Stack
 
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: nodejs18.x
+    Architectures:
+      - x86_64
+
 Parameters:
   Environment:
     Type: String
@@ -14,7 +21,7 @@ Resources:
     Properties:
       Handler: app.lambdaHandler
       CodeUri: ../../src/websocket-handler/
-      Description: Handles connect and disconnect requests for the WebSocket API.
+      Description: Handle WebSocket connection lifecycle routes ($connect, $disconnect).
       Environment:
         Variables:
           CONNECTIONS_TABLE: !Ref WebSocketConnectionsTable
@@ -25,5 +32,5 @@ Resources:
 Outputs:
   WebSocketHandlerFunctionArn:
     Value: !GetAtt WebSocketHandlerFunction.Arn
-  WebSocketHandlerFunctionRoleArn:
-    Value: !GetAtt WebSocketHandlerFunction.Role
+  WebSocketHandlerFunctionArnGetAtt:
+    Value: !GetAtt WebSocketHandlerFunction.Arn

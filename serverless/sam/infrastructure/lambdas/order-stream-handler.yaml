@@ -2,6 +2,13 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Order Stream Handler Lambda Stack
 
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: nodejs18.x
+    Architectures:
+      - x86_64
+
 Parameters:
   Environment:
     Type: String
@@ -17,12 +24,13 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: app.lambdaHandler
-      CodeUri: ../../src/stream-handler/
-      Description: Processes DynamoDB Stream events from OrdersTable and broadcasts them via APIGW WebSocket API.
+      CodeUri: ../../src/order-stream/
+      Description: Processes DynamoDB Streams for Orders Table to push events over WebSocket connections.
       Environment:
         Variables:
           CONNECTIONS_TABLE: !Ref WebSocketConnectionsTable
-          WEBSOCKET_ENDPOINT: !Sub ${WebSocketApiId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+          WEBSOCKET_API_ID: !Ref WebSocketApiId
+          AWS_REGION_NAME: !Ref AWS::Region
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref WebSocketConnectionsTable
@@ -30,10 +38,9 @@ Resources:
             - Effect: Allow
               Action:
                 - execute-api:ManageConnections
-              Resource:
-                - !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApiId}/${Environment}/*
+              Resource: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApiId}/*
       Events:
-        DynamoDBStreamEvent:
+        OrdersStream:
           Type: DynamoDB
           Properties:
             Stream: !Ref OrdersTableStreamArn

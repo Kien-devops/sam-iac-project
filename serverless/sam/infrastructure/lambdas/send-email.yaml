@@ -2,6 +2,13 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Send Email Lambda Stack
 
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: nodejs18.x
+    Architectures:
+      - x86_64
+
 Parameters:
   Environment:
     Type: String
@@ -11,25 +18,26 @@ Parameters:
     Type: String
 
 Resources:
-  SendEmailConfirmationFunction:
+  SendEmailFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: app.lambdaHandler
       CodeUri: ../../src/send-email/
-      Description: Read from SQS, build invoice, publish to EmailNotificationTopic for delivery.
+      Description: Process Send Email SQS message and trigger SES notifications.
       Environment:
         Variables:
           EMAIL_TOPIC_ARN: !Ref EmailNotificationTopicArn
       Policies:
-        - Version: '2012-10-17'
-          Statement:
+        - Statement:
             - Effect: Allow
               Action:
                 - sns:Publish
-                - sns:ListSubscriptionsByTopic
-                - sns:GetSubscriptionAttributes
-                - sns:SetSubscriptionAttributes
               Resource: !Ref EmailNotificationTopicArn
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: "*"
       Events:
         SQSQueueEvent:
           Type: SQS
@@ -38,5 +46,5 @@ Resources:
             BatchSize: 10
 
 Outputs:
-  SendEmailConfirmationFunctionArn:
-    Value: !GetAtt SendEmailConfirmationFunction.Arn
+  SendEmailFunctionArn:
+    Value: !GetAtt SendEmailFunction.Arn

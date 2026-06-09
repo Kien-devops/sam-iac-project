@@ -2,6 +2,13 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Daily Revenue Report Lambda Stack
 
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: nodejs18.x
+    Architectures:
+      - x86_64
+
 Parameters:
   Environment:
     Type: String
