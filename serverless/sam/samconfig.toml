@@ -6,7 +6,7 @@ resolve_s3 = false
 s3_prefix = "hybrid-devops-serverless-prod"
 region = "ap-southeast-2"
 confirm_changeset = false
-capabilities = "CAPABILITY_IAM"
+capabilities = ["CAPABILITY_IAM", "CAPABILITY_AUTO_EXPAND"]
 parameter_overrides = "Environment=\"prod\""
 image_repositories = []
 
@@ -16,5 +16,5 @@ resolve_s3 = false
 s3_prefix = "hybrid-devops-serverless-prod"
 region = "ap-southeast-2"
 confirm_changeset = true
-capabilities = "CAPABILITY_IAM"
+capabilities = ["CAPABILITY_IAM", "CAPABILITY_AUTO_EXPAND"]
 parameter_overrides = "Environment=\"prod\""

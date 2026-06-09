@@ -113,7 +113,7 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           cd serverless/sam
-          sam deploy --config-env prod --s3-bucket ${{ steps.bootstrap-sam.outputs.sam_bucket }} --no-confirm-changeset --no-fail-on-empty-changeset
+          sam deploy --config-env prod --s3-bucket ${{ steps.bootstrap-sam.outputs.sam_bucket }} --no-confirm-changeset --no-fail-on-empty-changeset --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
 
   # =========================================================================
   # Stage 1 (Parallel): Backend Unit Testing & Auditing
