@@ -1,5 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
+# Orchestrated root template for serverless e-commerce infrastructure
 Description: >
   hybrid-devops-ecommerce-aws serverless stack
   Orchestrates granular nested stacks for Database, Storage, Messaging, API Gateway, and Compute.
