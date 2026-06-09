@@ -1,6 +1,6 @@
 const orderRepository = require('../repositories/order.repository');
 const orderEmitter = require('../events/order.emitter');
-const { SubscribeCommand } = require('@aws-sdk/client-sns');
+const { SubscribeCommand, ListSubscriptionsByTopicCommand, SetSubscriptionAttributesCommand } = require('@aws-sdk/client-sns');
 const { GetObjectCommand } = require('@aws-sdk/client-s3');
 const { snsClient, s3Client, useLocalMock } = require('../config/aws');
 
@@ -129,6 +129,31 @@ Thank you for buying from our Cloud-Native platform!
       if (!emailTopicArn) {
         throw new Error('Email Notification Topic ARN is not configured');
       }
+
+      // First, check if subscription already exists and fix its FilterPolicy
+      try {
+        const listCmd = new ListSubscriptionsByTopicCommand({ TopicArn: emailTopicArn });
+        const listResp = await snsClient.send(listCmd);
+        const existing = (listResp.Subscriptions || []).find(
+          s => s.Endpoint === email && s.Protocol === 'email'
+        );
+
+        if (existing && existing.SubscriptionArn !== 'PendingConfirmation') {
+          // Subscription already confirmed — ensure FilterPolicy is correct
+          const setAttrCmd = new SetSubscriptionAttributesCommand({
+            SubscriptionArn: existing.SubscriptionArn,
+            AttributeName: 'FilterPolicy',
+            AttributeValue: JSON.stringify({ email: [email] })
+          });
+          await snsClient.send(setAttrCmd);
+          console.log(`[SNS Service] FilterPolicy updated for existing subscription: ${email}`);
+          return { success: true, message: `Email ${email} is already subscribed. FilterPolicy has been verified.` };
+        }
+      } catch (listErr) {
+        console.warn('[SNS Service] Could not list/update existing subscriptions:', listErr.message);
+      }
+
+      // Subscribe with FilterPolicy (new subscription or pending)
       console.log(`[SNS Service] Subscribing email: ${email} to EmailNotificationTopic: ${emailTopicArn}`);
       const command = new SubscribeCommand({
         TopicArn: emailTopicArn,

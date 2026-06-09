@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const userRepository = require('../repositories/user.repository');
 const { verifyPassword, hashPassword } = require('../utils/hash');
 const { snsClient, useLocalMock } = require('../config/aws');
-const { SubscribeCommand, ListSubscriptionsByTopicCommand } = require('@aws-sdk/client-sns');
+const { SubscribeCommand, ListSubscriptionsByTopicCommand, SetSubscriptionAttributesCommand } = require('@aws-sdk/client-sns');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecretjwtkeyforlocaldev123!';
 
@@ -143,7 +143,21 @@ class AuthController {
           });
         }
 
-        // Confirmed!
+        // Confirmed! Ensure FilterPolicy is set so this subscriber
+        // only receives emails matching their own address.
+        // This also fixes old subscriptions created without FilterPolicy.
+        try {
+          const setAttrCommand = new SetSubscriptionAttributesCommand({
+            SubscriptionArn: userSub.SubscriptionArn,
+            AttributeName: 'FilterPolicy',
+            AttributeValue: JSON.stringify({ email: [user.email] })
+          });
+          await snsClient.send(setAttrCommand);
+          console.log(`[SNS] FilterPolicy ensured for ${user.email}`);
+        } catch (filterErr) {
+          console.warn(`[SNS] Could not set FilterPolicy for ${user.email}:`, filterErr.message);
+        }
+
         const updatedUser = await userRepository.updateStatus(user.id, 'Active');
         return res.status(200).json({
           message: 'Account verified and activated successfully!',

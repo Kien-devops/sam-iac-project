@@ -20,7 +20,7 @@ exports.lambdaHandler = async (event, context) => {
       // Build invoice text
       const invoiceText = `
 =========================================
-          TAX INVOICE - ORDER NOTIFICATION
+        TAX INVOICE - ORDER NOTIFICATION
 =========================================
 Order ID: ${order.id}
 Date: ${new Date(order.createdAt).toUTCString()}
